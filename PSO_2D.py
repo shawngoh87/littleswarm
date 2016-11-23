@@ -86,12 +86,25 @@ def updateVelocity(c1, c2, currentVelocity, currentPosition,
     return newVelocity
 
 
-def updatePosition(currentPosition, currentVelocity):
+def updatePosition(currentPosition, currentVelocity, searchSpace):
     """Return [new X position, new Y position]
     Calculates the new axial position.
+
+    Idea: THE POINTS ARE NOT BOUND!!!! WENT OUTSIDE THE PERIMETER
+
+    Changelog:
+    1. Added searchSpace to the mix, so the points are bound.
     """
     xPosition = currentPosition[0] + currentVelocity[0]
     yPosition = currentPosition[1] + currentVelocity[1]
+    if xPosition < min(searchSpace[0]):
+        xPosition = min(searchSpace[0])
+    elif xPosition > max(searchSpace[0]):
+        xPosition = max(searchSpace[0])
+    if yPosition < min(searchSpace[1]):
+        yPosition = min(searchSpace[1])
+    elif yPosition > max(searchSpace[1]):
+        yPosition = max(searchSpace[1])
     newPosition = [xPosition, yPosition]
     return newPosition
 
@@ -170,14 +183,14 @@ def updatePersonalBest(particleCurrentPosition, particleCurrentCost, particleBes
         pass
     return particleBestPosition, particleBestCost
 
-
+#----------------------------CONSTANTS------------------------------#
 # Parameters:
 problemSize = 0 # Not used yet
 searchSpace = [[-500.0,500.0], [-500.0, 500.0]] # [[x_range], [y_range]]
 initialVelocity = [0.0,0.0]
 maxIteration = 1000
 maxVelocity = 20
-maxParticle = 20
+maxParticle = 30
 populationSize = 50 # Not used yet
 iteration = 0
 stopCondition = 1 # Not used yet
@@ -195,7 +208,7 @@ debugBestCost = []
 debugAllPosition = []
 debugAllCost = []
 
-# Main
+#----------------------------MAIN------------------------------#
 # Particle creation
 particleCurrentCost, particleBestCost, particleVelocity, \
 particleCurrentPosition, particleBestPosition, globalBestPosition, globalBestCost \
@@ -217,7 +230,7 @@ while(iteration < maxIteration and stopCondition): # TODO: stopCondition as a fu
         particleVelocity[n] = updateVelocity(c1, c2, particleVelocity[n], particleCurrentPosition[n],
                                              particleBestPosition[n], globalBestPosition, maxVelocity,
                                              inertiaFactor)
-        particleCurrentPosition[n] = updatePosition(particleCurrentPosition[n], particleVelocity[n])
+        particleCurrentPosition[n] = updatePosition(particleCurrentPosition[n], particleVelocity[n], searchSpace)
         particleCurrentCost[n] = costFunction(particleCurrentPosition[n])
         particleBestPosition[n], particleBestCost[n] = updatePersonalBest(particleCurrentPosition[n], \
                                                                     particleCurrentCost[n], particleBestPosition[n], particleBestCost[n])
@@ -226,8 +239,8 @@ while(iteration < maxIteration and stopCondition): # TODO: stopCondition as a fu
         # debugAllPosition[iteration].append(particleCurrentPosition[n])
         # debugAllCost[iteration].append(particleCurrentCost[n])
         plt.plot(particleCurrentPosition[n][0], particleCurrentPosition[n][1], 'b.')
-        plt.pause(0.001)
 
+    plt.pause(0.001)
     globalBestPosition, globalBestCost = updateGlobalBest(mode, particleBestPosition, particleBestCost, globalBestPosition, globalBestCost)
     # debugBestPosition.append(globalBestPosition)
     # debugBestCost.append(globalBestCost)
@@ -239,21 +252,4 @@ while(iteration < maxIteration and stopCondition): # TODO: stopCondition as a fu
         plt.xlim(searchSpace[0][0],searchSpace[0][1])
         plt.ylim(searchSpace[1][0],searchSpace[1][1])
 
-
-# Plot
-# for i in range(iteration):
-#     for j in range(maxParticle):
-#         plt.plot(debugAllPosition[i][j][0], debugAllPosition[i][j][1], 'b.')
-#     plt.plot(debugBestPosition[i][0], debugBestPosition[i][1], 'rp')
-#
-# plt.show()
-
-# PRINT
-# print(particleCurrentPosition[:2])
-# print(particleCurrentCost[:2])
-# print(particleBestPosition[:2])
-# print(particleBestCost[:2])
-# print(globalBestPosition)
-# print(globalBestCost)
-# print(particleVelocity[:2])
 
