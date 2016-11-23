@@ -1,7 +1,7 @@
-# PSO_2D.py
-# Shawn Goh
-#
-#################################
+# File Name     :   PSO_2D.py
+# Created on    :   21/11/2016
+# Author        :   Shawn Goh <shawngoh87@hotmail.com>
+
 
 import os
 import sys
@@ -205,10 +205,6 @@ for i in range(iteration):
         plt.plot(debugAllPosition[i][j][0], debugAllPosition[i][j][1], 'b.')
     plt.plot(debugBestPosition[i][0], debugBestPosition[i][1], 'rp')
     # plt.savefig()
-
-# print(debugBestPosition)
-# for i in range(len(debugBestPosition)):
-#     plt.plot(debugBestPosition[i][0], debugBestPosition[i][1], '.')
 
 plt.show()
 
