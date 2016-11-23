@@ -26,7 +26,7 @@ def dist(pointA, pointB):
     return np.linalg.norm(np.array(pointA) - np.array(pointB))
 
 
-def costFunction_stub(costBias, costRadius, currentPosition, pointArray):
+def costFunction(costBias, costRadius, currentPosition, pointArray):
     """Return cost as float
     Calculate the cost according to [x, y], where f(x, y) = blah blah.
 
@@ -44,9 +44,10 @@ def costFunction_stub(costBias, costRadius, currentPosition, pointArray):
         else: pass
 
     cost = costBias*count
+    return cost
 
 
-def costFunction(currentPosition): # currentPosition = [x, y, z, ..., last-dimension]
+def costFunction_stub(currentPosition): # currentPosition = [x, y, z, ..., last-dimension]
     """Return f(x, y) as float
     Calculate the cost according to [x, y], where f(x, y) = blah blah.
 
@@ -59,9 +60,7 @@ def costFunction(currentPosition): # currentPosition = [x, y, z, ..., last-dimen
     return (cos(x*y)*(x**2.0-y**2.0))
 
 
-def updateVelocity(c1, c2, currentVelocity, currentPosition,
-                   particleBestPosition, globalBestPosition, maxVelocity,
-                   inertiaFactor):
+def updateVelocity(c1, c2, currentVelocity, currentPosition, particleBestPosition, globalBestPosition, maxVelocity, inertiaFactor):
     """Return [new X velocity, new Y velocity]
     Calculates axial velocity according to PSO velocity formula.
 
@@ -109,9 +108,7 @@ def updatePosition(currentPosition, currentVelocity, searchSpace):
     return newPosition
 
 
-def createParticle(c1, c2, maxParticle, searchSpace,
-                   globalBestPosition, globalBestCost, maxVelocity,
-                   inertiaFactor):
+def createParticle(c1, c2, maxParticle, searchSpace, globalBestPosition, globalBestCost, maxVelocity, inertiaFactor):
     """Return a bunch of initialized lists/values.
     Creates the following:
     particleCurrentPosition -- Every particle's current position in [x, y]
@@ -129,7 +126,7 @@ def createParticle(c1, c2, maxParticle, searchSpace,
     particleVelocity = []
     for i in range(maxParticle):
         particleCurrentPosition.append([randomVector(searchSpace[0]), randomVector(searchSpace[1])])
-        particleCurrentCost.append(costFunction(particleCurrentPosition[i]))
+        particleCurrentCost.append(costFunction(costBias, costRadius, particleCurrentPosition[i], pointArray))
         particleBestPosition.append(particleCurrentPosition[i])
         particleBestCost.append(particleCurrentCost[i])
 
@@ -195,10 +192,14 @@ populationSize = 50 # Not used yet
 iteration = 0
 stopCondition = 1 # Not used yet
 mode = 'min' # optimize for max/min
+pointArray = []
+gap = 50
 
 c1 = 2 # personal best bias
 c2 = 2 # global best bias
 inertiaFactor = 1 # 0.5 < x < 2.0
+costBias = 1
+costRadius = 50
 globalBestPosition = [0,0]
 globalBestCost = 1000000.0
 
@@ -212,14 +213,12 @@ debugAllCost = []
 # Particle creation
 particleCurrentCost, particleBestCost, particleVelocity, \
 particleCurrentPosition, particleBestPosition, globalBestPosition, globalBestCost \
-= createParticle(c1, c2, maxParticle, searchSpace,
-                 globalBestPosition, globalBestCost,
-                 maxVelocity, inertiaFactor)
+= createParticle(c1, c2, maxParticle, searchSpace, globalBestPosition, globalBestCost, maxVelocity, inertiaFactor)
 
 # Initialize plot
 plt.figure()
-plt.xlim(searchSpace[0][0],searchSpace[0][1])
-plt.ylim(searchSpace[1][0],searchSpace[1][1])
+plt.xlim(searchSpace[0][0]-gap,searchSpace[0][1]+gap)
+plt.ylim(searchSpace[1][0]-gap,searchSpace[1][1]+gap)
 
 # Iterate to maxIteration or stopCondition = False
 while(iteration < maxIteration and stopCondition): # TODO: stopCondition as a function of cohesion/area coverage
@@ -231,25 +230,21 @@ while(iteration < maxIteration and stopCondition): # TODO: stopCondition as a fu
                                              particleBestPosition[n], globalBestPosition, maxVelocity,
                                              inertiaFactor)
         particleCurrentPosition[n] = updatePosition(particleCurrentPosition[n], particleVelocity[n], searchSpace)
-        particleCurrentCost[n] = costFunction(particleCurrentPosition[n])
+        particleCurrentCost[n] = costFunction(costBias, costRadius, particleCurrentPosition[n], pointArray)
         particleBestPosition[n], particleBestCost[n] = updatePersonalBest(particleCurrentPosition[n], \
                                                                     particleCurrentCost[n], particleBestPosition[n], particleBestCost[n])
-        # debugAllPosition.append([])
-        # debugAllCost.append([])
-        # debugAllPosition[iteration].append(particleCurrentPosition[n])
-        # debugAllCost[iteration].append(particleCurrentCost[n])
+
         plt.plot(particleCurrentPosition[n][0], particleCurrentPosition[n][1], 'b.')
+        pointArray.append(particleCurrentPosition[n])
 
     plt.pause(0.001)
     globalBestPosition, globalBestCost = updateGlobalBest(mode, particleBestPosition, particleBestCost, globalBestPosition, globalBestCost)
-    # debugBestPosition.append(globalBestPosition)
-    # debugBestCost.append(globalBestCost)
 
     iteration+=1
     # DEBUG FOR MOVEMENT
     if iteration%5 == 0:
         plt.clf()
-        plt.xlim(searchSpace[0][0],searchSpace[0][1])
-        plt.ylim(searchSpace[1][0],searchSpace[1][1])
+        plt.xlim(searchSpace[0][0] - gap, searchSpace[0][1] + gap)
+        plt.ylim(searchSpace[1][0] - gap, searchSpace[1][1] + gap)
 
 
