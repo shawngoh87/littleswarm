@@ -8,10 +8,13 @@ This is a simplified version of PSO, emphasizing:
 -- Locality, therefore updateBest is removed, and costs are calculated based on local inputs.
 -- Trail left behind by each swarm unit.
 -- A constantly arranged and trimmed pointArray buffer.
--- Scalability, adding more bots doesn't affect the algorithm as it based on local rules.
+-- Scalability, adding more bots doesn't affect the algorithm as it is based on local rules.
 
 Idea:
 1.  Add local bias for points made for "trail"
+2.  Use grid to replace point array.
+    --  Initialize grid with size of searchSpace
+    --  Whenever a coordinate is added, the grid[i][j] is
 """
 #-----------------------IMPORTS & NAMESPACE-------------------------#
 import os, sys
@@ -20,46 +23,65 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import *
 
-
-
 #----------------------------FUNCTIONS------------------------------#
 def dist(pointA, pointB):
     """Return Euclidean distance between pointA and pointB"""
     return np.linalg.norm(np.array(pointA) - np.array(pointB))
-
+def sumAscend(length, degree):
+    """Return 1+2+3+...+length"""
+    if length > 1:
+        return length ** degree + sumAscend(length - 1, degree)
+    else:
+        return length
 def randomVector(range):
     """Return a float between range"""
     return random.uniform(range[0], range[1])
-
 def rotate(vector, degree):
     """Return rotated vector"""
     x, y = vector
     degree = degree/180 *pi
     return [x*cos(degree) - y*sin(degree), x*sin(degree) + y*cos(degree)]
-
-def roulette(array):
+def roulette(array, degree):
     """Randomly choose an element, decreasing weight across the array"""
     numel = len(array)
-
+    rand = random.random()*sumAscend(numel, degree)
+    for i in range(len(array)):
+        rand -= numel**degree
+        numel -= 1
+        if rand <= 0:
+            return array[len(array) - numel - 1]
+def outOfBound(point):
+    x, y = point
+    xMax, yMax
+    return
 
 def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
     """Return newPosition and newVelocity"""
-    count = 0
     costArray = []
     px, py = position
     for angle in range(-angleLimit, angleLimit + angleStep, angleStep):
+        count = 0
         vx, vy = rotate(velocity, angle)
-        cpoint = px + vx, py + vy
+        cpoint = [px + vx, py + vy]
         for point in pointArray:
-            if dist(point, cpoint) < costRadius:
+            temp = dist(point, cpoint)
+            if temp < costRadius:
                 count += 1
+            elif temp < costRadius*2:
+                count += 0.1
+            elif temp < costRadius*5:
+                count += 0.02
         costArray.append([angle, count])
     costArray = sorted(costArray, key = lambda a:a[1])
-    # Roulette wheel!!!! For BIASED RANDOMING
-
-    temp = floor(random.random()*(len(costArray)-1))
-    medianAngle = costArray[temp][0] # Need tweaks
+    print(costArray)
+    medianAngle = roulette(costArray, rouletteDegree)[0]
+    if medianAngle > 0:
+        counter[0] += 1
+    elif medianAngle == 0:
+        counter[1] += 1
+    else: counter[2] += 1
     vx, vy = rotate(velocity, medianAngle)
+    x, y = [px + vx, py + vy]
     return [px + vx, py + vy], [vx, vy]
 
 def init(step, maxParticle, searchSpace):
@@ -73,6 +95,10 @@ def init(step, maxParticle, searchSpace):
     return particlePosition, particleVelocity
 
 #----------------------------CONSTANTS------------------------------#
+global rouletteDegree
+global counter
+rouletteDegree = 2.0
+counter = [0]*3
 stop = 1
 gap = 50
 step = 20
@@ -80,9 +106,9 @@ iteration = 0
 maxParticle = 5
 maxIteration = 100
 costRadius = 50
-angleLimit = 60
+angleLimit = 30
 angleStep = 10
-length = 1000.0
+length = 500.0
 searchSpace = [[-(length/2),(length/2)], [-(length/2), (length/2)]] # [[x_range], [y_range]]
 plt.figure(1)
 plt.xlim(searchSpace[0][0]-gap,searchSpace[0][1]+gap)
@@ -94,12 +120,16 @@ particlePosition, particleVelocity = init(step, maxParticle, searchSpace)
 while(iteration < maxIteration and stop):
     for n in range(maxParticle):
         print("Iteration: " + str(iteration) + " Particle: " + str(n))
-        particlePosition[n], particleVelocity[n] = cost(particlePosition[n], particleVelocity[n], angleLimit, angleStep, costRadius, pointArray)
+        particlePosition[n], particleVelocity[n] = cost(particlePosition[n], particleVelocity[n], \
+                                                        angleLimit, angleStep, costRadius, pointArray)
         pointArray.append(particlePosition[n])
         plt.plot(particlePosition[n][0], particlePosition[n][1], 'b.')
     plt.pause(0.001)
     iteration += 1
 
+
+print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
+print(counter)
 plt.figure(1)
 plt.close()
 plt.figure(2)
