@@ -14,7 +14,13 @@ Idea:
 1.  Add local bias for points made for "trail"
 2.  Use grid to replace point array.
     --  Initialize grid with size of searchSpace
-    --  Whenever a coordinate is added, the grid[i][j] is
+    --  Whenever a coordinate is added, the grid[i][j] += 1\
+        where i and j are the bounded boxes.
+3.  In directional checking, use box/really-slim-ellipse instead of circle.
+    --  Or a series of small circles!
+
+Issues:
+1.  The points still have noticeable clustering.
 """
 #-----------------------IMPORTS & NAMESPACE-------------------------#
 import os, sys
@@ -51,9 +57,12 @@ def roulette(array, degree):
         if rand <= 0:
             return array[len(array) - numel - 1]
 def outOfBound(point):
+    """If out-of-bound, return True"""
     x, y = point
-    xMax, yMax
-    return
+    xMax, yMax = searchSpace[0], searchSpace[1]
+    if (x <= xMax[0] or x >= xMax[1]) or (y <= yMax[0] or y >= yMax[1]):
+        return True
+    else: return False
 
 def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
     """Return newPosition and newVelocity"""
@@ -81,8 +90,13 @@ def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
         counter[1] += 1
     else: counter[2] += 1
     vx, vy = rotate(velocity, medianAngle)
-    x, y = [px + vx, py + vy]
-    return [px + vx, py + vy], [vx, vy]
+    cpoint = [px + vx, py + vy]
+    while(outOfBound(cpoint)):
+        temp = random.random() * 360 # Reflects when boundary hit
+        vx, vy = rotate([vx, vy], temp)
+        cpoint = [px + vx, py + vy]
+    rand = random.uniform(0.5, 1.0) # Prevent clustering of resonant steps
+    return [px + rand*vx, py + rand*vy], [vx, vy]
 
 def init(step, maxParticle, searchSpace):
     """Return position and velocity array of size(maxParticle)"""
@@ -97,14 +111,15 @@ def init(step, maxParticle, searchSpace):
 #----------------------------CONSTANTS------------------------------#
 global rouletteDegree
 global counter
-rouletteDegree = 2.0
+global searchSpace
+rouletteDegree = 5.0
 counter = [0]*3
 stop = 1
 gap = 50
 step = 20
 iteration = 0
 maxParticle = 5
-maxIteration = 100
+maxIteration = 1000
 costRadius = 50
 angleLimit = 30
 angleStep = 10
