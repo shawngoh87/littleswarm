@@ -102,25 +102,38 @@ def inPolygon(point, *args):
             return False
         prev = vertex
     return True
+def checkForward(position, velocity, angle, angleStep, pointArray):
+    """Return cost count"""
+    # global line1, line2, line3 # Temporary solution to remove lines
+    count = 0
+    px, py = position
+    pointMid = rotate(velocity, angle)
+    pointLeft = rotate(pointMid, angleStep / 2)  # VELOCITY LAI DER
+    pointRight = rotate(pointMid, -angleStep / 2)  # VELOCITY LAI DER
+    # cMid = add2DVectors(position, pointMid)
+    cLeft = add2DVectors(position, pointLeft)
+    cRight = add2DVectors(position, pointRight)
+    # line1, = plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=2)
+    # line2, = plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=2)
+    # line3, = plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=2)
+    # lineList.append(line1)
+    # lineList.append(line2)
+    # lineList.append(line3)
+    lineList.append(plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=1),)
+    lineList.append(plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=1),)
+    lineList.append(plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=1),)
+
+    for point in pointArray:
+        if inPolygon(point, cLeft, cRight, position):
+            count += 1
+    return count
 
 def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
     """Return newPosition and newVelocity"""
     costArray = []
     px, py = position
     for angle in range(-angleLimit, angleLimit + angleStep, angleStep):
-        count = 0
-        pointMid = rotate(velocity, angle)
-        pointLeft = rotate(pointMid, angleStep / 2)
-        pointRight = rotate(pointMid, -angleStep / 2)
-        cMid = add2DVectors(position, pointMid)
-        cLeft = add2DVectors(position, pointLeft)
-        cRight = add2DVectors(position, pointRight)
-        plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=2)
-        plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=2)
-        plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=2)
-        for index, point in enumerate(pointArray):
-            if inPolygon(point, pointLeft, pointRight, [px, py]):
-                count += 1
+        count = checkForward(position, velocity, angle, angleStep, pointArray)
         costArray.append([angle, count])
     costArray = sorted(costArray, key = lambda a:a[1])
     print(costArray)
@@ -149,12 +162,14 @@ def init(step, maxParticle, searchSpace):
         particleVelocity.append(rotate([step, step], temp))
     return particlePosition, particleVelocity
 
-#----------------------------CONSTANTS------------------------------#
+#----------------------------CONSTANTS------------------------------# SO MANY GLOBAL VARIABLES OH GOD
 global rouletteDegree
 global counter
 global searchSpace
 global step
 global ellipseRatio
+global lineList
+lineList = []
 ellipseRatio = 5
 rouletteDegree = 5.0
 counter = [0]*3
@@ -183,12 +198,21 @@ while(iteration < maxIteration and stop):
                                                         angleLimit, angleStep, costRadius, pointArray)
         pointArray.append(particlePosition[n])
         plt.plot(particlePosition[n][0], particlePosition[n][1], 'b.')
-    plt.pause(0.001)
+
+    plt.pause(0.01)
     iteration += 1
-    if iteration%5 == 0:
-        plt.clf()
-        plt.xlim(searchSpace[0][0] - gap, searchSpace[0][1] + gap)
-        plt.ylim(searchSpace[1][0] - gap, searchSpace[1][1] + gap)
+    for i in range(len(lineList)):
+        """Removes every line in the figure
+        Still not sure why a simple FOR-loop won't work
+        Have to manually pop the list
+        """
+        print(len(lineList))
+        line, = lineList.pop()
+        line.remove()
+    # if iteration%5 == 0:
+    #     plt.clf()
+    #     plt.xlim(searchSpace[0][0] - gap, searchSpace[0][1] + gap)
+    #     plt.ylim(searchSpace[1][0] - gap, searchSpace[1][1] + gap)
 
 
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
