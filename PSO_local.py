@@ -27,6 +27,7 @@ import os, sys
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from math import *
 
 #----------------------------FUNCTIONS------------------------------#
@@ -56,6 +57,8 @@ def roulette(array, degree):
         numel -= 1
         if rand <= 0:
             return array[len(array) - numel - 1]
+def add2DVectors(vec1, vec2):
+    return [vec1[0] + vec2[0], vec1[1] + vec2[1]]
 def outOfBound(point):
     """If out-of-bound, return True"""
     x, y = point
@@ -63,6 +66,42 @@ def outOfBound(point):
     if (x <= xMax[0] or x >= xMax[1]) or (y <= yMax[0] or y >= yMax[1]):
         return True
     else: return False
+def checkForward(cpoint, point, mode='Ellipse'):
+    if mode == 'Ellipse':
+        bigRadius = step
+        smallRadius = step/ellipseRatio
+        h, k = cpoint
+        x, y = point
+
+        if (((x-h)**2)/bigRadius + ((y-k)**2)/smallRadius) <= 1:
+            return True
+        else: return False
+
+    elif mode == 'Circle':
+        print("Dev is pissed with circles.")
+def onLeftSide(linePointA, linePointB, point):
+    """Return True if the point is on the left side of the line"""
+    x, y = point
+    xA, yA = linePointA
+    xB, yB = linePointB
+    A = -(yB - yA)
+    B = xB - xA
+    C = -(A * xA + B * yA)
+    D = A * x + B * y + C
+    if D >= 0:
+        return True
+    else: return False
+def inPolygon(point, *args):
+    """Return True if the point is inside a convex polygon.
+    point -- Target point.
+    *args -- Arbitrary number of vertices, in pairs of [x, y]
+    """
+    prev = args[-1]
+    for vertex in args:
+        if onLeftSide(vertex, prev, point) == False:
+            return False
+        prev = vertex
+    return True
 
 def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
     """Return newPosition and newVelocity"""
@@ -70,16 +109,18 @@ def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
     px, py = position
     for angle in range(-angleLimit, angleLimit + angleStep, angleStep):
         count = 0
-        vx, vy = rotate(velocity, angle)
-        cpoint = [px + vx, py + vy]
-        for point in pointArray:
-            temp = dist(point, cpoint)
-            if temp < costRadius:
+        pointMid = rotate(velocity, angle)
+        pointLeft = rotate(pointMid, angleStep / 2)
+        pointRight = rotate(pointMid, -angleStep / 2)
+        cMid = add2DVectors(position, pointMid)
+        cLeft = add2DVectors(position, pointLeft)
+        cRight = add2DVectors(position, pointRight)
+        plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=2)
+        plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=2)
+        plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=2)
+        for index, point in enumerate(pointArray):
+            if inPolygon(point, pointLeft, pointRight, [px, py]):
                 count += 1
-            elif temp < costRadius*2:
-                count += 0.1
-            elif temp < costRadius*5:
-                count += 0.02
         costArray.append([angle, count])
     costArray = sorted(costArray, key = lambda a:a[1])
     print(costArray)
@@ -112,6 +153,9 @@ def init(step, maxParticle, searchSpace):
 global rouletteDegree
 global counter
 global searchSpace
+global step
+global ellipseRatio
+ellipseRatio = 5
 rouletteDegree = 5.0
 counter = [0]*3
 stop = 1
@@ -119,10 +163,10 @@ gap = 50
 step = 20
 iteration = 0
 maxParticle = 5
-maxIteration = 1000
+maxIteration = 100
 costRadius = 50
 angleLimit = 30
-angleStep = 10
+angleStep = 30
 length = 500.0
 searchSpace = [[-(length/2),(length/2)], [-(length/2), (length/2)]] # [[x_range], [y_range]]
 plt.figure(1)
@@ -141,6 +185,10 @@ while(iteration < maxIteration and stop):
         plt.plot(particlePosition[n][0], particlePosition[n][1], 'b.')
     plt.pause(0.001)
     iteration += 1
+    if iteration%5 == 0:
+        plt.clf()
+        plt.xlim(searchSpace[0][0] - gap, searchSpace[0][1] + gap)
+        plt.ylim(searchSpace[1][0] - gap, searchSpace[1][1] + gap)
 
 
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
