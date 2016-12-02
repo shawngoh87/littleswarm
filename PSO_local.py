@@ -16,8 +16,7 @@ Idea:
     --  Initialize grid with size of searchSpace
     --  Whenever a coordinate is added, the grid[i][j] += 1\
         where i and j are the bounded boxes.
-3.  In directional checking, use box/really-slim-ellipse instead of circle.
-    --  Or a series of small circles!
+3.  Increase the size of the checking boxes.
 
 Issues:
 1.  The points still have noticeable clustering.
@@ -31,56 +30,78 @@ import time
 from math import *
 
 #----------------------------FUNCTIONS------------------------------#
+
+def add2DVectors(vec1, vec2):
+    """Return vec1 + vec2"""
+    return [vec1[0] + vec2[0], vec1[1] + vec2[1]]
+def checkForward(position, velocity, angle, angleStep, pointArray):
+    """Return cost count
+    This function creates a triangle in the direction of the velocity,
+    and counts the point in the triangle. Then plots three lines and store
+    it in the global lineList for removal after the iteration.
+    2------1------3
+     \           /
+      \         /       0 is the current position
+       \       /        1 is the current position + current velocity,
+        \     /                 which equals to the next position
+         \   /          2 is cLeft
+          \ /           3 is cRight
+           0
+    """
+    count = 0
+    px, py = position
+    pointMid = rotate(velocity, angle)
+    pointLeft = rotate(pointMid, angleStep / 2)
+    pointRight = rotate(pointMid, -angleStep / 2)
+    cLeft = add2DVectors(position, pointLeft)
+    cRight = add2DVectors(position, pointRight)
+    lineList.append(plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=1),)
+    lineList.append(plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=1),)
+    lineList.append(plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=1),)
+    for point in pointArray:
+        if inPolygon(point, cLeft, cRight, position):
+            count += 1
+    return count
+def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
+    """Return next position and velocity
+    This function checks the path forward using checkForward().
+    Then checks if the next move is out-of-bound, reassign a move if yes.
+    """
+    costArray = []
+    px, py = position
+    for angle in range(-angleLimit, angleLimit + angleStep, angleStep):
+        count = checkForward(position, velocity, angle, angleStep, pointArray)
+        costArray.append([angle, count])
+    costArray = sorted(costArray, key = lambda a:a[1])
+    medianAngle = roulette(costArray, rouletteDegree)[0]
+    vx, vy = rotate(velocity, medianAngle)
+    cpoint = [px + vx, py + vy]
+    while(outOfBound(cpoint)):
+        temp = random.random() * 360 # Reflects when boundary hit
+        vx, vy = rotate([vx, vy], temp)
+        cpoint = [px + vx, py + vy]
+    rand = random.uniform(0.5, 1.0) # Prevent clustering of resonant steps
+    return [px + rand*vx, py + rand*vy], [vx, vy]
 def dist(pointA, pointB):
     """Return Euclidean distance between pointA and pointB"""
     return np.linalg.norm(np.array(pointA) - np.array(pointB))
-def sumAscend(length, degree):
-    """Return 1+2+3+...+length"""
-    if length > 1:
-        return length ** degree + sumAscend(length - 1, degree)
-    else:
-        return length
-def randomVector(range):
-    """Return a float between range"""
-    return random.uniform(range[0], range[1])
-def rotate(vector, degree):
-    """Return rotated vector"""
-    x, y = vector
-    degree = degree/180 *pi
-    return [x*cos(degree) - y*sin(degree), x*sin(degree) + y*cos(degree)]
-def roulette(array, degree):
-    """Randomly choose an element, decreasing weight across the array"""
-    numel = len(array)
-    rand = random.random()*sumAscend(numel, degree)
-    for i in range(len(array)):
-        rand -= numel**degree
-        numel -= 1
-        if rand <= 0:
-            return array[len(array) - numel - 1]
-def add2DVectors(vec1, vec2):
-    return [vec1[0] + vec2[0], vec1[1] + vec2[1]]
-def outOfBound(point):
-    """If out-of-bound, return True"""
-    x, y = point
-    xMax, yMax = searchSpace[0], searchSpace[1]
-    if (x <= xMax[0] or x >= xMax[1]) or (y <= yMax[0] or y >= yMax[1]):
-        return True
-    else: return False
-def checkForward(cpoint, point, mode='Ellipse'):
-    if mode == 'Ellipse':
-        bigRadius = step
-        smallRadius = step/ellipseRatio
-        h, k = cpoint
-        x, y = point
-
-        if (((x-h)**2)/bigRadius + ((y-k)**2)/smallRadius) <= 1:
-            return True
-        else: return False
-
-    elif mode == 'Circle':
-        print("Dev is pissed with circles.")
+def inPolygon(point, *args):
+    """Return True if the point is inside a convex polygon.
+    Checks whether the target point is inside a polygon specified
+    by the vertices.
+    Example call: check point [2,3] in a triangle.
+    inPolygon([2,3], [0,0], [10,10], [0,10])
+    """
+    prev = args[-1]
+    for vertex in args:
+        if onLeftSide(vertex, prev, point) == False:
+            return False
+        prev = vertex
+    return True
 def onLeftSide(linePointA, linePointB, point):
-    """Return True if the point is on the left side of the line"""
+    """Return True if point is on left of line A to B
+    Maths. Geometry.
+    """
     x, y = point
     xA, yA = linePointA
     xB, yB = linePointB
@@ -91,66 +112,47 @@ def onLeftSide(linePointA, linePointB, point):
     if D >= 0:
         return True
     else: return False
-def inPolygon(point, *args):
-    """Return True if the point is inside a convex polygon.
-    point -- Target point.
-    *args -- Arbitrary number of vertices, in pairs of [x, y]
+def outOfBound(point):
+    """Return True if point is out-of-bound
+    Checks global variable searchSpace if the target point
+    is out-of-bound
     """
-    prev = args[-1]
-    for vertex in args:
-        if onLeftSide(vertex, prev, point) == False:
-            return False
-        prev = vertex
-    return True
-def checkForward(position, velocity, angle, angleStep, pointArray):
-    """Return cost count"""
-    # global line1, line2, line3 # Temporary solution to remove lines
-    count = 0
-    px, py = position
-    pointMid = rotate(velocity, angle)
-    pointLeft = rotate(pointMid, angleStep / 2)  # VELOCITY LAI DER
-    pointRight = rotate(pointMid, -angleStep / 2)  # VELOCITY LAI DER
-    # cMid = add2DVectors(position, pointMid)
-    cLeft = add2DVectors(position, pointLeft)
-    cRight = add2DVectors(position, pointRight)
-    # line1, = plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=2)
-    # line2, = plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=2)
-    # line3, = plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=2)
-    # lineList.append(line1)
-    # lineList.append(line2)
-    # lineList.append(line3)
-    lineList.append(plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=1),)
-    lineList.append(plt.plot([cLeft[0], px], [cLeft[1], py], color='k', lw=1),)
-    lineList.append(plt.plot([cRight[0], px], [cRight[1], py], color='k', lw=1),)
-
-    for point in pointArray:
-        if inPolygon(point, cLeft, cRight, position):
-            count += 1
-    return count
-
-def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
-    """Return newPosition and newVelocity"""
-    costArray = []
-    px, py = position
-    for angle in range(-angleLimit, angleLimit + angleStep, angleStep):
-        count = checkForward(position, velocity, angle, angleStep, pointArray)
-        costArray.append([angle, count])
-    costArray = sorted(costArray, key = lambda a:a[1])
-    print(costArray)
-    medianAngle = roulette(costArray, rouletteDegree)[0]
-    if medianAngle > 0:
-        counter[0] += 1
-    elif medianAngle == 0:
-        counter[1] += 1
-    else: counter[2] += 1
-    vx, vy = rotate(velocity, medianAngle)
-    cpoint = [px + vx, py + vy]
-    while(outOfBound(cpoint)):
-        temp = random.random() * 360 # Reflects when boundary hit
-        vx, vy = rotate([vx, vy], temp)
-        cpoint = [px + vx, py + vy]
-    rand = random.uniform(0.5, 1.0) # Prevent clustering of resonant steps
-    return [px + rand*vx, py + rand*vy], [vx, vy]
+    x, y = point
+    xMax, yMax = searchSpace[0], searchSpace[1]
+    if (x <= xMax[0] or x >= xMax[1]) or (y <= yMax[0] or y >= yMax[1]):
+        return True
+    else: return False
+def randomVector(range):
+    """Return a float between range"""
+    return random.uniform(range[0], range[1])
+def rotate(vector, degree):
+    """Return rotated vector"""
+    x, y = vector
+    degree = degree/180 *pi
+    return [x*cos(degree) - y*sin(degree), x*sin(degree) + y*cos(degree)]
+def roulette(array, degree):
+    """Return an element of the array by weighted randomization.
+    The degree will determine the weight of the elements.
+    Example: a 4-element array will have the following weights--
+    Degree 1: [4,3,2,1]     normalized to   [0.4, 0.3, 0.2, 0.1]
+    Degree 2: [16,9,4,1]    normalized to   [0.53, 0.3, 0.13, 0.03]
+    Degree 3: [64,27,8,1]   normalized to   [0.64, 0.27, 0.08, 0.01]
+    """
+    numel = len(array)
+    rand = random.random()*sumAscend(numel, degree)
+    for i in range(len(array)):
+        rand -= numel**degree
+        numel -= 1
+        if rand <= 0:
+            return array[len(array) - numel - 1]
+def sumAscend(length, degree):
+    """Return 1+2+3+...+length
+    Degree will increase the power of addition
+    """
+    if length > 1:
+        return length ** degree + sumAscend(length - 1, degree)
+    else:
+        return length
 
 def init(step, maxParticle, searchSpace):
     """Return position and velocity array of size(maxParticle)"""
@@ -178,7 +180,7 @@ gap = 50
 step = 20
 iteration = 0
 maxParticle = 5
-maxIteration = 100
+maxIteration = 1000
 costRadius = 50
 angleLimit = 30
 angleStep = 30
@@ -190,6 +192,7 @@ plt.ylim(searchSpace[1][0]-gap,searchSpace[1][1]+gap)
 pointArray = []
 
 #----------------------------MAIN------------------------------#
+t = time.time()
 particlePosition, particleVelocity = init(step, maxParticle, searchSpace)
 while(iteration < maxIteration and stop):
     for n in range(maxParticle):
@@ -206,17 +209,11 @@ while(iteration < maxIteration and stop):
         Still not sure why a simple FOR-loop won't work
         Have to manually pop the list
         """
-        print(len(lineList))
         line, = lineList.pop()
         line.remove()
-    # if iteration%5 == 0:
-    #     plt.clf()
-    #     plt.xlim(searchSpace[0][0] - gap, searchSpace[0][1] + gap)
-    #     plt.ylim(searchSpace[1][0] - gap, searchSpace[1][1] + gap)
-
 
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
-print(counter)
+print("Elapsed time: " + str(round(time.time() - t, 3)) + " seconds")
 plt.figure(1)
 plt.close()
 plt.figure(2)
