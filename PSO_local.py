@@ -27,16 +27,19 @@ import os, sys
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gspec
+from mpl_toolkits.mplot3d import Axes3D
 import time
 from math import *
 
 #----------------------------FUNCTIONS------------------------------#
 
-def testGraphs():
-    """Stub. Mock functions for contour and humidity."""
-    pass
-    contour = sin(x) + sin(y)
-    humidity = sin(x+2) + sin(y+2)
+def testGraphs(pointArray):
+    """Return 3D pointArray of contour and humidity"""
+    contour = [[x,y,-(x**2)-y**2] for x,y in pointArray]
+    humidity = [[x,y,x**2 - y**2] for x,y in pointArray]
+    return contour, humidity
+
 def add2DVectors(vec1, vec2):
     """Return vec1 + vec2"""
     return [vec1[0] + vec2[0], vec1[1] + vec2[1]]
@@ -180,7 +183,7 @@ global step
 global ellipseRatio
 global lineList
 global checkScale
-checkScale = 2
+checkScale = 3
 lineList = []
 ellipseRatio = 5
 rouletteDegree = 5.0
@@ -190,7 +193,7 @@ gap = 50
 step = 20
 iteration = 0
 maxParticle = 5
-maxIteration = 1000
+maxIteration = 500
 costRadius = 50
 angleLimit = 30
 angleStep = 30
@@ -214,6 +217,7 @@ while(iteration < maxIteration and stop):
 
     plt.pause(0.01)
     iteration += 1
+    # Remove boxes
     for i in range(len(lineList)):
         """Removes every line in the figure
         Still not sure why a simple FOR-loop won't work
@@ -222,6 +226,7 @@ while(iteration < maxIteration and stop):
         line, = lineList.pop()
         line.remove()
 
+# Conclusion plot
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
 print("Elapsed time: " + str(round(time.time() - t, 3)) + " seconds")
 plt.figure(1)
@@ -231,5 +236,12 @@ plt.xlim(searchSpace[0][0]-gap,searchSpace[0][1]+gap)
 plt.ylim(searchSpace[1][0]-gap,searchSpace[1][1]+gap)
 for i in range(len(pointArray)):
     plt.plot(pointArray[i][0], pointArray[i][1], 'r.')
+
+contour, humidity = testGraphs(pointArray)
+ax = plt.figure(3).add_subplot(111, projection='3d')
+ax.plot_trisurf([i[0] for i in contour], [j[1] for j in contour], [k[2] for k in contour])
+
+ax = plt.figure(4).add_subplot(111, projection='3d')
+ax.plot_trisurf([i[0] for i in humidity], [j[1] for j in humidity], [k[2] for k in humidity])
 
 plt.show()
