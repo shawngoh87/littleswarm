@@ -163,6 +163,21 @@ def sumAscend(length, degree):
         return length ** degree + sumAscend(length - 1, degree)
     else:
         return length
+def checkGrid(pointArray):
+    gridLength = 0.05*length
+    pointDict = {}
+    for i in range(int(searchSpace[1][0]),int(searchSpace[1][1]+gridLength),int(gridLength)):
+        for j in range(int(searchSpace[0][0]),int(searchSpace[0][1]+gridLength),int(gridLength)):
+            leftBound = j
+            rightBound = j + gridLength
+            upperBound = i + gridLength
+            lowerBound = i
+            withinBound = [[x[0],x[1]] for x in pointArray if leftBound<=x[0]<rightBound and lowerBound<=x[1]<upperBound]
+            count = len(withinBound)
+            if (count>2):
+                print(j,i)
+            pointDict[(j,i)] = [count, withinBound]
+    return pointDict
 
 def init(step, maxParticle, searchSpace):
     """Return position and velocity array of size(maxParticle)"""
@@ -182,6 +197,7 @@ global step
 global ellipseRatio
 global lineList
 global checkScale
+global length
 lineList = []
 pointArray = []
 stop = 1 # Not implemented yet
@@ -192,7 +208,7 @@ gap = 50 # Plot padding
 length = 1000.0 # How big is the field? (Square's side length)
 rouletteDegree = 4.0 # Tendency of the swarm units to go for unexplored places.
 maxParticle = 5 # How many bots?
-maxIteration = 300 # How many iteration?
+maxIteration = 30 # How many iteration?
 angleLimit = 30 # Check function's hitboxes angular span, from +angleLimit to -anglelimit
 angleStep = 30 # How many hitboxes/directions available? number of directions = (2*angleLimit/angleStep) + 1
 
@@ -226,6 +242,11 @@ while(iteration < maxIteration and stop):
         line, = lineList.pop()
         line.remove()
 
+
+pointDict = checkGrid(pointArray)
+xy = [x[0] for x in pointDict if x[0] > 4]
+# print(xy)
+
 # Conclusion plot
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
 delta_time = round(time.time() - t,3)
@@ -250,6 +271,13 @@ ax4.text(0, 0.25, "Bots:\t\t\t".expandtabs() + str(maxParticle)) # More Stuffs
 contour, humidity = testGraphs(pointArray)
 
 ax1.plot([i[0] for i in pointArray], [j[1] for j in pointArray], 'r.')
+
+for x in range(-500,501,50):
+    ax1.plot([x,x], [-500,500], lw=1, color='grey')
+
+for y in range(-500,501,50):
+    ax1.plot([-500,500], [y,y], lw=1, color='k')
+
 ax2.plot_trisurf([i[0] for i in contour], [j[1] for j in contour], [k[2] for k in contour])
 ax3.plot_trisurf([i[0] for i in humidity], [j[1] for j in humidity], [k[2] for k in humidity])
 
