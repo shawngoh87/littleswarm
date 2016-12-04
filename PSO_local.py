@@ -39,7 +39,6 @@ def testGraphs(pointArray):
     contour = [[x,y,-(x**2)-y**2] for x,y in pointArray]
     humidity = [[x,y,x**2 - y**2] for x,y in pointArray]
     return contour, humidity
-
 def add2DVectors(vec1, vec2):
     """Return vec1 + vec2"""
     return [vec1[0] + vec2[0], vec1[1] + vec2[1]]
@@ -73,7 +72,7 @@ def checkForward(position, velocity, angle, angleStep, pointArray):
         if inPolygon(point, cLeft, cRight, position):
             count += 1
     return count
-def cost(position, velocity, angleLimit, angleStep, costRadius, pointArray):
+def cost(position, velocity, angleLimit, angleStep, pointArray):
     """Return next position and velocity
     This function checks the path forward using checkForward().
     Then checks if the next move is out-of-bound, reassign a move if yes.
@@ -183,35 +182,36 @@ global step
 global ellipseRatio
 global lineList
 global checkScale
-checkScale = 3
 lineList = []
-ellipseRatio = 5
-rouletteDegree = 5.0
-counter = [0]*3
-stop = 1
-gap = 50
-step = 20
-iteration = 0
-maxParticle = 5
-maxIteration = 300
-costRadius = 50
-angleLimit = 30
-angleStep = 30
-length = 500.0
-searchSpace = [[-(length/2),(length/2)], [-(length/2), (length/2)]] # [[x_range], [y_range]]
-plt.figure(1)
-plt.xlim(searchSpace[0][0]-gap,searchSpace[0][1]+gap)
-plt.ylim(searchSpace[1][0]-gap,searchSpace[1][1]+gap)
 pointArray = []
+stop = 1 # Not implemented yet
+iteration = 0
+counter = [0]*3
+gap = 50 # Plot padding
+
+length = 1000.0 # How big is the field? (Square's side length)
+rouletteDegree = 4.0 # Tendency of the swarm units to go for unexplored places.
+maxParticle = 5 # How many bots?
+maxIteration = 300 # How many iteration?
+angleLimit = 30 # Check function's hitboxes angular span, from +angleLimit to -anglelimit
+angleStep = 30 # How many hitboxes/directions available? number of directions = (2*angleLimit/angleStep) + 1
+
+step = length/sqrt(maxIteration*maxParticle) # Experimental relationship
+checkScale = 0.1*length/step # Experimental relationship
+searchSpace = [[-(length/2),(length/2)], [-(length/2), (length/2)]] # [xrange,yrange] of the square field
 
 #----------------------------MAIN------------------------------#
+fig = plt.figure(1, facecolor='white')
+fig.canvas.set_window_title("Real-time movement monitoring")
+plt.xlim(searchSpace[0][0]-gap,searchSpace[0][1]+gap)
+plt.ylim(searchSpace[1][0]-gap,searchSpace[1][1]+gap)
 t = time.time()
 particlePosition, particleVelocity = init(step, maxParticle, searchSpace)
 while(iteration < maxIteration and stop):
     for n in range(maxParticle):
         print("Iteration: " + str(iteration) + " Particle: " + str(n))
         particlePosition[n], particleVelocity[n] = cost(particlePosition[n], particleVelocity[n], \
-                                                        angleLimit, angleStep, costRadius, pointArray)
+                                                        angleLimit, angleStep, pointArray)
         pointArray.append(particlePosition[n])
         plt.plot(particlePosition[n][0], particlePosition[n][1], 'b.')
 
