@@ -193,7 +193,7 @@ gap = 50
 step = 20
 iteration = 0
 maxParticle = 5
-maxIteration = 500
+maxIteration = 300
 costRadius = 50
 angleLimit = 30
 angleStep = 30
@@ -228,20 +228,29 @@ while(iteration < maxIteration and stop):
 
 # Conclusion plot
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
-print("Elapsed time: " + str(round(time.time() - t, 3)) + " seconds")
+delta_time = round(time.time() - t,3)
+print("Elapsed time: " + str(delta_time) + " seconds")
 plt.figure(1)
 plt.close()
-plt.figure(2)
-plt.xlim(searchSpace[0][0]-gap,searchSpace[0][1]+gap)
-plt.ylim(searchSpace[1][0]-gap,searchSpace[1][1]+gap)
-for i in range(len(pointArray)):
-    plt.plot(pointArray[i][0], pointArray[i][1], 'r.')
+fig = plt.figure(2, figsize=(10,7), facecolor='white')
+fig.canvas.set_window_title("Summary")
+gs = gspec.GridSpec(8,10) # 6 cells
+ax1 = plt.figure(2).add_subplot(gs[0:5,0:5],title='Heatmap',
+                                xlim=(searchSpace[0][0]-gap,searchSpace[0][1]+gap),
+                                ylim=(searchSpace[1][0]-gap,searchSpace[1][1]+gap))
+ax2 = plt.figure(2).add_subplot(gs[0:4,6:10],projection='3d',title='Contour')
+ax3 = plt.figure(2).add_subplot(gs[4:8,6:10],projection='3d',title='Humidity')
+ax4 = plt.figure(2).add_subplot(gs[6:8,0:5],frame_on=False,title='Search summary:')
+ax4.get_xaxis().set_visible(False)
+ax4.get_yaxis().set_visible(False)
+ax4.text(0, 0.75, "Elapsed time:  ".expandtabs() + str(delta_time) + " seconds")
+ax4.text(0, 0.5,  "Iterations:   \t\t".expandtabs(tabsize=4) + str(iteration)) # Stuffs
+ax4.text(0, 0.25, "Bots:\t\t\t".expandtabs() + str(maxParticle)) # More Stuffs
 
 contour, humidity = testGraphs(pointArray)
-ax = plt.figure(3).add_subplot(111, projection='3d')
-ax.plot_trisurf([i[0] for i in contour], [j[1] for j in contour], [k[2] for k in contour])
 
-ax = plt.figure(4).add_subplot(111, projection='3d')
-ax.plot_trisurf([i[0] for i in humidity], [j[1] for j in humidity], [k[2] for k in humidity])
+ax1.plot([i[0] for i in pointArray], [j[1] for j in pointArray], 'r.')
+ax2.plot_trisurf([i[0] for i in contour], [j[1] for j in contour], [k[2] for k in contour])
+ax3.plot_trisurf([i[0] for i in humidity], [j[1] for j in humidity], [k[2] for k in humidity])
 
 plt.show()
