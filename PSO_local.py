@@ -17,6 +17,7 @@ Idea:
     --  Whenever a coordinate is added, the grid[i][j] += 1\
         where i and j are the bounded boxes.
 3.  Increase the size of the checking boxes.
+4.  Grid checking to return spread consistency, grid size = 1% of search space?
 
 Issues:
 1.  The points still have noticeable clustering.
@@ -31,6 +32,11 @@ from math import *
 
 #----------------------------FUNCTIONS------------------------------#
 
+def testGraphs():
+    """Stub. Mock functions for contour and humidity."""
+    pass
+    contour = sin(x) + sin(y)
+    humidity = sin(x+2) + sin(y+2)
 def add2DVectors(vec1, vec2):
     """Return vec1 + vec2"""
     return [vec1[0] + vec2[0], vec1[1] + vec2[1]]
@@ -53,6 +59,8 @@ def checkForward(position, velocity, angle, angleStep, pointArray):
     pointMid = rotate(velocity, angle)
     pointLeft = rotate(pointMid, angleStep / 2)
     pointRight = rotate(pointMid, -angleStep / 2)
+    pointLeft = [x*checkScale for x in pointLeft]
+    pointRight = [x*checkScale for x in pointRight]
     cLeft = add2DVectors(position, pointLeft)
     cRight = add2DVectors(position, pointRight)
     lineList.append(plt.plot([cLeft[0], cRight[0]], [cLeft[1], cRight[1]], color='k', lw=1),)
@@ -171,6 +179,8 @@ global searchSpace
 global step
 global ellipseRatio
 global lineList
+global checkScale
+checkScale = 2
 lineList = []
 ellipseRatio = 5
 rouletteDegree = 5.0
