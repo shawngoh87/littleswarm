@@ -164,7 +164,11 @@ def sumAscend(length, degree):
     else:
         return length
 def checkGrid(pointArray):
-    gridLength = 0.05*length
+    percent = 0.05
+    total = 0
+    totalSquared = []
+    gridLength = percent*length
+    gridSideCount = 1/percent
     pointDict = {}
     for i in range(int(searchSpace[1][0]),int(searchSpace[1][1]+gridLength),int(gridLength)):
         for j in range(int(searchSpace[0][0]),int(searchSpace[0][1]+gridLength),int(gridLength)):
@@ -174,9 +178,18 @@ def checkGrid(pointArray):
             lowerBound = i
             withinBound = [[x[0],x[1]] for x in pointArray if leftBound<=x[0]<rightBound and lowerBound<=x[1]<upperBound]
             count = len(withinBound)
-            if (count>2):
-                print(j,i)
+            total += count
+            totalSquared.append(count)
+            # if (count>2):
+            #     print(j,i)
             pointDict[(j,i)] = [count, withinBound]
+    avg = total/(gridSideCount**2)
+    totalSquared = [(x-avg)**2 for x in totalSquared]
+    variance = (sum(totalSquared))/(gridSideCount**2)
+    sd = sqrt(variance)
+    print("Average: " + str(avg))
+    print("Variance: " + str(variance))
+    print("Standard Deviation: " + str(sd))
     return pointDict
 
 def init(step, maxParticle, searchSpace):
@@ -205,13 +218,15 @@ iteration = 0
 counter = [0]*3
 gap = 50 # Plot padding
 
-length = 1000.0 # How big is the field? (Square's side length)
-rouletteDegree = 4.0 # Tendency of the swarm units to go for unexplored places.
+length = 1000.0 # How big is the side length of the square field?
+rouletteDegree = 4.0 # How attracted are the bots, to unexplored areas?
 maxParticle = 5 # How many bots?
-maxIteration = 30 # How many iteration?
-angleLimit = 30 # Check function's hitboxes angular span, from +angleLimit to -anglelimit
-angleStep = 30 # How many hitboxes/directions available? number of directions = (2*angleLimit/angleStep) + 1
+maxIteration = 100 # How many iteration?
+checkAngle = 60 # How wide in front you want to check?
+checkDirection = 3 # How many directions available to choose?
 
+angleLimit = int(checkAngle/2) # Experimental relationship
+angleStep = int((2*angleLimit)/(checkDirection-1)) # Experimental relationship
 step = length/sqrt(maxIteration*maxParticle) # Experimental relationship
 checkScale = 0.1*length/step # Experimental relationship
 searchSpace = [[-(length/2),(length/2)], [-(length/2), (length/2)]] # [xrange,yrange] of the square field
@@ -244,8 +259,8 @@ while(iteration < maxIteration and stop):
 
 
 pointDict = checkGrid(pointArray)
-xy = [x[0] for x in pointDict if x[0] > 4]
-# print(xy)
+xy = [[x[0],x[1]] for x in pointDict if x[0] > 8]
+# print(len(xy))
 
 # Conclusion plot
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
