@@ -11,16 +11,11 @@ This is a simplified version of PSO, emphasizing:
 -- Scalability, adding more bots doesn't affect the algorithm as it is based on local rules.
 
 Idea:
-1.  Add local bias for points made for "trail"
-2.  Use grid to replace point array.
-    --  Initialize grid with size of searchSpace
-    --  Whenever a coordinate is added, the grid[i][j] += 1\
-        where i and j are the bounded boxes.
-3.  Increase the size of the checking boxes.
-4.  Grid checking to return spread consistency, grid size = 1% of search space?
+1.
 
 Issues:
 1.  The points still have noticeable clustering.
+2.  Do not use stats as stopCondition, might stop prematurely if bots happened to travel in a nice spread.
 """
 #-----------------------IMPORTS & NAMESPACE-------------------------#
 import os, sys
@@ -34,7 +29,7 @@ from math import *
 
 #----------------------------FUNCTIONS------------------------------#
 
-def testGraphs(pointArray):
+def getCondition(pointArray):
     """Return 3D pointArray of contour and humidity"""
     contour = [[x,y,-(x**2)-y**2] for x,y in pointArray]
     humidity = [[x,y,x**2 - y**2] for x,y in pointArray]
@@ -164,12 +159,17 @@ def sumAscend(length, degree):
     else:
         return length
 def checkGrid(pointArray):
+    """Final evaluation of the result.
+    pointDict = {[grid_x, grid_y]:[count, [...coordinates...]]}
+    statDict = {Stat: Value}
+    """
     percent = 0.05
     total = 0
     totalSquared = []
     gridLength = percent*length
     gridSideCount = 1/percent
     pointDict = {}
+    statDict = {}
     for i in range(int(searchSpace[1][0]),int(searchSpace[1][1]+gridLength),int(gridLength)):
         for j in range(int(searchSpace[0][0]),int(searchSpace[0][1]+gridLength),int(gridLength)):
             leftBound = j
@@ -183,14 +183,14 @@ def checkGrid(pointArray):
             # if (count>2):
             #     print(j,i)
             pointDict[(j,i)] = [count, withinBound]
-    avg = total/(gridSideCount**2)
+    statDict["Average"] = avg = total/(gridSideCount**2)
     totalSquared = [(x-avg)**2 for x in totalSquared]
-    variance = (sum(totalSquared))/(gridSideCount**2)
-    sd = sqrt(variance)
-    print("Average: " + str(avg))
-    print("Variance: " + str(variance))
-    print("Standard Deviation: " + str(sd))
-    return pointDict
+    statDict["Variance"] = variance = (sum(totalSquared))/(gridSideCount**2)
+    statDict["SD"] = sd = sqrt(variance)
+    # print("Average: " + str(avg))
+    # print("Variance: " + str(variance))
+    # print("Standard Deviation: " + str(sd))
+    return pointDict, statDict
 
 def init(step, maxParticle, searchSpace):
     """Return position and velocity array of size(maxParticle)"""
@@ -221,14 +221,14 @@ gap = 50 # Plot padding
 length = 1000.0 # How big is the side length of the square field?
 rouletteDegree = 4.0 # How attracted are the bots, to unexplored areas?
 maxParticle = 5 # How many bots?
-maxIteration = 100 # How many iteration?
-checkAngle = 60 # How wide in front you want to check?
-checkDirection = 3 # How many directions available to choose?
+maxIteration = 3 # How many iteration?
+checkAngle = 40 # How wide in front you want to check?
+checkDirection = 2 # How many directions available to choose?
 
 angleLimit = int(checkAngle/2) # Experimental relationship
 angleStep = int((2*angleLimit)/(checkDirection-1)) # Experimental relationship
-step = length/sqrt(maxIteration*maxParticle) # Experimental relationship
-checkScale = 0.1*length/step # Experimental relationship
+step = 1.5*length/sqrt(maxIteration*maxParticle) # Experimental relationship
+checkScale = 0.15*length/step # Experimental relationship
 searchSpace = [[-(length/2),(length/2)], [-(length/2), (length/2)]] # [xrange,yrange] of the square field
 
 #----------------------------MAIN------------------------------#
@@ -258,9 +258,10 @@ while(iteration < maxIteration and stop):
         line.remove()
 
 
-pointDict = checkGrid(pointArray)
-xy = [[x[0],x[1]] for x in pointDict if x[0] > 8]
-# print(len(xy))
+pointDict, statDict = checkGrid(pointArray)
+print("Average: " + str(statDict["Average"]))
+print("Variance: " + str(statDict["Variance"]))
+print("Standard Deviation: " + str(statDict["SD"]))
 
 # Conclusion plot
 print("Point Array stored: " + str(len(pointArray)) + " Coordinate pairs")
@@ -280,20 +281,16 @@ ax4 = plt.figure(2).add_subplot(gs[6:8,0:5],frame_on=False,title='Search summary
 ax4.get_xaxis().set_visible(False)
 ax4.get_yaxis().set_visible(False)
 ax4.text(0, 0.75, "Elapsed time:  ".expandtabs() + str(delta_time) + " seconds")
-ax4.text(0, 0.5,  "Iterations:   \t\t".expandtabs(tabsize=4) + str(iteration)) # Stuffs
-ax4.text(0, 0.25, "Bots:\t\t\t".expandtabs() + str(maxParticle)) # More Stuffs
+ax4.text(0, 0.55, "Iterations:   \t\t".expandtabs(tabsize=4) + str(iteration)) # Stuffs
+ax4.text(0, 0.35, "Bots:\t\t\t".expandtabs() + str(maxParticle)) # More Stuffs
+ax4.text(0, 0.15, "S/Deviation: ".expandtabs() + str(round(statDict["SD"],3)))
 
-contour, humidity = testGraphs(pointArray)
+contour, humidity = getCondition(pointArray)
 
-ax1.plot([i[0] for i in pointArray], [j[1] for j in pointArray], 'r.')
-
-for x in range(-500,501,50):
-    ax1.plot([x,x], [-500,500], lw=1, color='grey')
-
-for y in range(-500,501,50):
-    ax1.plot([-500,500], [y,y], lw=1, color='k')
-
-ax2.plot_trisurf([i[0] for i in contour], [j[1] for j in contour], [k[2] for k in contour])
-ax3.plot_trisurf([i[0] for i in humidity], [j[1] for j in humidity], [k[2] for k in humidity])
+[ax1.plot([x,x], [-500,500], lw=1, color='grey') for x in range(-500,501,50)] # Heatmap x-grid
+[ax1.plot([-500,500], [y,y], lw=1, color='grey') for y in range(-500,501,50)] # Heatmap y-grid
+ax1.plot([i[0] for i in pointArray], [j[1] for j in pointArray], 'r.') # Heatmap plot
+ax2.plot_trisurf([i[0] for i in contour], [j[1] for j in contour], [k[2] for k in contour]) # contour plot
+ax3.plot_trisurf([i[0] for i in humidity], [j[1] for j in humidity], [k[2] for k in humidity]) # humidity plot
 
 plt.show()
