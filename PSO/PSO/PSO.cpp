@@ -33,8 +33,15 @@ float* rotate(float* vec, float angleDegree){
 	return vecRotate;
 }
 
-
-//def rotate(vector, degree)
+int sumAscend(int length, int degree){
+	/*
+	Recursively summing from (1 to length)
+	*/
+	if (length > 1){
+		return pow(length, degree) + sumAscend(length - 1, degree);
+	}
+	else return length;
+}
 //def roulette(array, degree)
 
 
@@ -45,9 +52,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	float* newCoord;
 	float vec1[] = { 1, 2 };
 	/*float vec2[] = { 3, 4 };
-	newCoord = add2DVectors(vec1, vec2);*/
+	newCoord = add2DVectors(vec1, vec2);
 	newCoord = rotate(vec1, 360);
-	printf("%.2f %.2f", newCoord[0], newCoord[1]);
+	printf("%.2f %.2f", newCoord[0], newCoord[1]);*/
+	printf("%d", sumAscend(3, 2));
 	getchar();
 
 	// Courtesy
