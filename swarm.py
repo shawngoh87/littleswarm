@@ -20,20 +20,25 @@ groundState
 - Trees?
 """
 
-def nextMove():
-    pass
-    botState = getState()
-    # posList = [[x[0], x[1]] for x in botState]
-    # bearList = [x[2] for x in botState]
-    # covList = [x[3] for x in botState]
-    # roleList = [x[4] for x in botState]
+def getState():
+    """Return all bots' state
+    Now store in same pc.
+    """
+    return
 
+def pushState():
+    """Push self state to server
+    server = botStateDict"""
 
-def getState(): # Get all bots' current state from server
-    pass
+def checkCoverage(position):
+    x, y = position
+    leftColumn = [coveredGround[]]
 
-def pushState(): # Push self state to server
-    pass
+def calculate(bot):
+    p, r, c = [botStateDict["position"][bot], botStateDict["role"][bot], botStateDict["coverage"][bot]]
+    if c < roleSwapThreshold:
+
+    return newPosition, newRole, newCoverage
 
 def pushData():
     temperature = getTemp()
@@ -43,32 +48,41 @@ def pushData():
     # TODO: POST request to server
     # return 0 if okay, 1 if not.
     pass
-
-def getPos():
-
-    return x, y
-    pass
-
-def getTemp(): # Get self current temperature
-    pass
-
-def getAltitude(): # Get self current altitude
-    pass
+# def getPos():
+#
+#     return x, y
+#     pass
+# def getTemp(): # Get self current temperature
+#     pass
+# def getAltitude(): # Get self current altitude
+#     pass
 
 def init(): # Initialization
-
-    pass
-
+    botStateDict = { "position" :   [[0,0],[0,1],[1,0],[1,1],[2,1]],
+                     "role"     :   ["explorer","explorer","explorer","explorer","explorer"],
+                     "coverage" :   [0,0,0,0,0]}
+    coveredGround = botStateDict["position"]
+    return
 
 
 #------------------------------------MAIN--------------------------------------#
-stopFlag == False
+global botStateDict
+global coveredGround
+global roleSwapThreshold
+
+
+stopFlag = False
+maxBotCount = 5
+roleSwapThreshold = 0.5
+
 init()
-while(stopCondition == False):
-    for n in range
-    pushState()
-    pushData()
-    getState()
-    calculate()
-    move()
+while(stopFlag == False):
+    for bot in range(maxBotCount):
+        #getState() ...replaced with botStateDict for the moment
+        # botState = [botStateDict["position"][n], botStateDict["role"][n], botStateDict["coverage"][n]]
+        # position, role, coverage = calculate(botState)
+        calculate(bot)
+        pushState(bot, )
+        do()
+        pushData()
     pass
