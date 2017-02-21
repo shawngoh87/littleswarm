@@ -5,6 +5,7 @@
 import matplotlib.pyplot as plt
 import os, sys, numpy
 import urllib.request
+import random
 
 """
 botState:
@@ -46,12 +47,56 @@ def checkCoverage(position):
 
     return count/totalCount
 
+def getDir(position):
+    """Return dirDict
+    Use this function to replace global dirDict
+    """
+
+def checkExplorePath(position):
+    """Returns available directions
+    Bearing: 0 - 7 starting from 3 o'clock anti-clockwise
+    """
+    emptyPath = []
+    x, y = position
+    dirDict ={
+        (x + 1, y): 0,
+        (x + 1, y + 1): 1,
+        (x, y + 1): 2,
+        (x - 1, y + 1): 3,
+        (x - 1, y): 4,
+        (x - 1, y - 1): 5,
+        (x, y - 1): 6,
+        (x + 1, y - 1): 7
+    }
+    for xx in range(x-1, x+2):
+        for yy in range(y-1, y+2):
+            if [xx,yy] != [x,y]:
+                if [xx,yy] not in envStateDict["explored"]:
+                    emptyPath.append(dirDict[(xx,yy)])
+    return emptyPath
+
+def checkWorkPath(position):
+    pass
 
 
 def calculate(bot):
     p, r, c = [botStateDict["position"][bot], botStateDict["role"][bot], botStateDict["coverage"][bot]]
     if c < roleSwapThreshold:
-        pass
+        # Set new role
+        newRole = "explorer"
+        # Set new position
+        path = checkExplorePath(p)
+        dir = random.choice(path) # Improve this to deterministic from randomized
+
+
+
+    else:
+        # Set new role
+        newRole = "worker"
+        # Set new position
+        path = checkWorkPath(p)
+
+
     return newPosition, newRole, newCoverage
 
 def pushData():
@@ -62,14 +107,10 @@ def pushData():
     # TODO: POST request to server
     # return 0 if okay, 1 if not.
     pass
-# def getPos():
-#
-#     return x, y
-#     pass
-# def getTemp(): # Get self current temperature
-#     pass
-# def getAltitude(): # Get self current altitude
-#     pass
+
+def updateMap():
+    pass
+
 
 def init(): # Initialization
     botStateDict = { "position" :   [[0,0],[0,1],[1,0],[1,1],[2,1]],
@@ -114,8 +155,9 @@ while(stopFlag == False):
         # botState = [botStateDict["position"][n], botStateDict["role"][n], botStateDict["coverage"][n]]
         # position, role, coverage = calculate(botState)
         calculate(bot)
-        pushState(bot, )
+        pushState(bot)
         do()
         pushData()
+        updateMap()
 
     pass
