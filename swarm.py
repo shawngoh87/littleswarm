@@ -114,7 +114,18 @@ def roleArbiter(bot):
             return "explorer" # Can cope
         else: return "worker" # Cannot cope
 
+def isOutOfBound(position):
+    x, y = position
+    xmin, xmax, ymin, ymax = boundary # Global variable
+    return x < xmin or x > xmax or y < ymin or y > ymax
 
+def explorePathArbiter(path):
+    """Returns the next direction
+    from a direction list 0-7
+    -- what if empty list?
+    -- what if ??
+    """
+    return random.choice(path)
 
 def calculate(bot, botStateDict, envStateDict):
     p, r, c = [botStateDict["position"][bot], botStateDict["role"][bot], botStateDict["coverage"][bot]]
@@ -123,8 +134,12 @@ def calculate(bot, botStateDict, envStateDict):
     if newRole == "explorer":
         # Set new explorer position
         path = checkExplorePath(p)
-        dir = random.choice(path) # Improve this to deterministic
+        dir = explorePathArbiter(path) # Improve this to deterministic, what if nowhere to go?
         newPosition = getNextPosition(p, dir)
+        while(isOutOfBound(newPosition)):
+            path.remove(dir)
+            dir = explorePathArbiter(path)
+            newPosition = getNextPosition(p, dir)
         newCoverage = checkCoverage(newPosition)
     else:
         # Set new worker position
@@ -141,7 +156,7 @@ def pushData(p, envStateDict):
     return envStateDict
 
 def init():
-    botStateDict = { "position" :   [[5,5]],#[5,6],#[1,0],[1,1],[2,1]],
+    botStateDict = { "position" :   [[5,5],[5,6]],#[1,0],[1,1],[2,1]],
                      "role"     :   ["explorer"]*maxBotCount,
                      "coverage" :   [0]*maxBotCount}
     envStateDict = { "explored" : botStateDict["position"][:], # Fucking list passed by reference dammit, use [:] #NEVERFORGET
@@ -154,15 +169,19 @@ global coverageLevel
 global roleSwapThreshold
 global maxBotCount
 global copingConstant # Ability of a bot to cope with workable areas
+global boundary
+
 
 artist = []
 copingConstant = 1
 coverageLevel = 1 # 1 = 3x3, 2 = 5x5 ... etc
 gridBoxSize = 1
 gridCount = 10
+boundary = [0, gridCount-1, 0, gridCount-1]
 stopFlag = False
-maxBotCount = 1
+maxBotCount = 2
 roleSwapThreshold = 0.5
+botColor = {0:"red",1:"yellow",2:"blue",3:"green",4:"purple"}
 
 fig = plt.figure(1)
 [plt.plot([x/10,x/10], [-0.5,9.5], lw=1, color='grey') for x in range(-5, gridCount*10+5, 10)]
@@ -187,8 +206,8 @@ while(stopFlag == False):
 
         for each in envStateDict["explored"]:
             shade(each, "#e0e0eb")
-        for each in botStateDict["position"]:
-            artist.append(plt.plot(each[0], each[1], 'r+'),)
+        for index, each in enumerate(botStateDict["position"]):
+            artist.append(plt.plot(each[0], each[1], ".", color=botColor[index]),)
         plt.pause(1)
         for n in range(len(artist)):
             thingy, = artist.pop()
