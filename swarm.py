@@ -35,7 +35,24 @@ def pushState(p, r, c, bot, botStateDict):
     botStateDict["role"][bot] = r
     botStateDict["coverage"][bot] = c
     return botStateDict
-
+def roleArbiter(bot):
+    """Return role
+    Things have not taken into account:
+    Is this bot nearest to workable area?
+    Does this bot has better exploration prospect than others?
+    """
+    if envStateDict["workable"] == []:
+        return "explorer"
+    else:
+        workerPercent = botStateDict["role"].count("worker")/maxBotCount
+        treePercent = len(envStateDict["workable"])/len(envStateDict["explored"])
+        if workerPercent*copingConstant > treePercent: # Can improve on this
+            return "explorer" # Can cope
+        else: return "worker" # Cannot cope
+def isOutOfBound(position):
+    x, y = position
+    xmin, xmax, ymin, ymax = boundary # Global variable
+    return x < xmin or x > xmax or y < ymin or y > ymax
 def shade(position, color):
     x, y = position
     currentAxis = plt.gca()
@@ -99,33 +116,20 @@ def checkExplorePath(position):
 def checkWorkPath(position):
     pass
 
-def roleArbiter(bot):
-    """Return role
-    Things have not taken into account:
-    Is this bot nearest to workable area?
-    Does this bot has better exploration prospect than others?
-    """
-    if envStateDict["workable"] == []:
-        return "explorer"
-    else:
-        workerPercent = botStateDict["role"].count("worker")/maxBotCount
-        treePercent = len(envStateDict["workable"])/len(envStateDict["explored"])
-        if workerPercent*copingConstant > treePercent: # Can improve on this
-            return "explorer" # Can cope
-        else: return "worker" # Cannot cope
-
-def isOutOfBound(position):
-    x, y = position
-    xmin, xmax, ymin, ymax = boundary # Global variable
-    return x < xmin or x > xmax or y < ymin or y > ymax
-
-def explorePathArbiter(path):
+def chooseExplorePath(position, pathList):
     """Returns the next direction
     from a direction list 0-7
     -- what if empty list?
     -- what if ??
     """
-    return random.choice(path)
+    x, y = position
+    c = {}
+    for dir in pathList:
+        c[dir] = checkCoverage(getNextPosition(position, dir))
+    c = sorted(c.items(), key = lambda k:k[1])
+    if len(c) == 0:
+        return None
+    else: return c[-1][0] # Return the one with the most coverage
 
 def calculate(bot, botStateDict, envStateDict):
     p, r, c = [botStateDict["position"][bot], botStateDict["role"][bot], botStateDict["coverage"][bot]]
@@ -133,26 +137,34 @@ def calculate(bot, botStateDict, envStateDict):
     newRole = roleArbiter(bot)
     if newRole == "explorer":
         # Set new explorer position
-        path = checkExplorePath(p)
-        dir = explorePathArbiter(path) # Improve this to deterministic, what if nowhere to go?
-        newPosition = getNextPosition(p, dir)
-        while(isOutOfBound(newPosition)):
-            path.remove(dir)
-            dir = explorePathArbiter(path)
+        pathList = checkExplorePath(p)
+        dir = chooseExplorePath(p, pathList) # Improve this to deterministic, what if nowhere to go?
+        if dir is None:
+            print("i am in none")
+            dir = random.randint(0,7)
             newPosition = getNextPosition(p, dir)
-        newCoverage = checkCoverage(newPosition)
-    else:
+            while isOutOfBound(newPosition):
+                dir = random.randint(0,7)
+                newPosition = getNextPosition(p, dir)
+        else:
+            newPosition = getNextPosition(p, dir)
+            while isOutOfBound(newPosition):
+                pathList.remove(dir)
+                dir = chooseExplorePath(p, pathList)
+                newPosition = getNextPosition(p, dir)
+            newCoverage = checkCoverage(newPosition)
+
+    elif newRole == "worker":
         # Set new worker position
         path = checkWorkPath(p)
+    else: print("Invalid role.")
 
     return newPosition, newRole, newCoverage
 
 def pushData(p, envStateDict):
     """Update envStateDict"""
-    print(envStateDict)
     if p not in envStateDict["explored"]:
         envStateDict["explored"].append(p)
-    print(envStateDict)
     return envStateDict
 
 def init():
@@ -177,6 +189,7 @@ copingConstant = 1
 coverageLevel = 1 # 1 = 3x3, 2 = 5x5 ... etc
 gridBoxSize = 1
 gridCount = 10
+pauseInterval = 0.01
 boundary = [0, gridCount-1, 0, gridCount-1]
 stopFlag = False
 maxBotCount = 2
@@ -208,7 +221,7 @@ while(stopFlag == False):
             shade(each, "#e0e0eb")
         for index, each in enumerate(botStateDict["position"]):
             artist.append(plt.plot(each[0], each[1], ".", color=botColor[index]),)
-        plt.pause(1)
+        plt.pause(pauseInterval)
         for n in range(len(artist)):
             thingy, = artist.pop()
             thingy.remove()
