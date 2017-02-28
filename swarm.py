@@ -9,17 +9,19 @@ import random
 from matplotlib.patches import Rectangle
 
 """
-botState:
+botStateDict:
 - X,Y coordinates
-- Bearing (Theta)
 - Percent coverage
 - Role
+envStateDict:
+- Explored coordinates
+- Tree coordinates
+- Completed coordinates
 
-groundState
-- X,Y coordinates
-- Temperature
-- Altitude
-- Trees?
+Optimization:
+Data structure for coordinate indexing
+-- Sorting in server and Binary Search in bot
+-- Bot collision check (if bot is surrounded by other bots)
 """
 
 def getState():
@@ -89,7 +91,9 @@ def getNextPosition(position, dir):
         6:[x    ,y-1],
         7:[x+1  ,y-1]
     }
-    return dirDict[dir]
+    if dir in range(0,8):
+        return dirDict[dir]
+    else: return None
 
 def checkExplorePath(position):
     """Returns available directions
@@ -126,10 +130,13 @@ def chooseExplorePath(position, pathList):
     x, y = position
     c = {}
     for dir in pathList:
-        c[dir] = checkCoverage(getNextPosition(position, dir))
+        nextPos = getNextPosition(position, dir)
+        if isOutOfBound(nextPos):
+            continue
+        else: c[dir] = checkCoverage(nextPos)
     c = sorted(c.items(), key = lambda k:k[1])
     if len(c) == 0:
-        return None
+        return 8
     else: return c[-1][0] # Return the one with the most coverage
 
 def calculate(bot, botStateDict, envStateDict):
@@ -140,8 +147,7 @@ def calculate(bot, botStateDict, envStateDict):
         # Set new explorer position
         pathList = checkExplorePath(p)
         dir = chooseExplorePath(p, pathList) # Improve this to deterministic, what if nowhere to go?
-        if dir is None:
-            print("i am in none")
+        if dir > 7: # No direction found
             dir = random.randint(0,7)
             newPosition = getNextPosition(p, dir)
             while isOutOfBound(newPosition):
@@ -153,7 +159,7 @@ def calculate(bot, botStateDict, envStateDict):
                 pathList.remove(dir)
                 dir = chooseExplorePath(p, pathList)
                 newPosition = getNextPosition(p, dir)
-            newCoverage = checkCoverage(newPosition)
+        newCoverage = checkCoverage(newPosition)
 
     elif newRole == "worker":
         # Set new worker position
@@ -169,7 +175,7 @@ def pushData(p, envStateDict):
     return envStateDict
 
 def init():
-    botStateDict = { "position" :   [[5,5],[5,6]],#[1,0],[1,1],[2,1]],
+    botStateDict = { "position" :   [[5,5],[5,6],[6,5],[6,6],[6,7]],
                      "role"     :   ["explorer"]*maxBotCount,
                      "coverage" :   [0]*maxBotCount}
     envStateDict = { "explored" : botStateDict["position"][:], # Fucking list passed by reference dammit, use [:] #NEVERFORGET
@@ -190,10 +196,10 @@ copingConstant = 1
 coverageLevel = 1 # 1 = 3x3, 2 = 5x5 ... etc
 gridBoxSize = 1
 gridCount = 10
-pauseInterval = 0.5
+pauseInterval = 0.001
 boundary = [0, gridCount-1, 0, gridCount-1]
 stopFlag = False
-maxBotCount = 2
+maxBotCount = 5
 roleSwapThreshold = 0.5
 botColor = {0:"red",1:"yellow",2:"blue",3:"green",4:"purple"}
 
@@ -212,12 +218,16 @@ for i in range(maxBotCount):
 while(stopFlag == False):
     for bot in range(maxBotCount):
         print("Bot number: " + str(bot))
-        # print(envStateDict)
+
         p, r, c = calculate(bot, botStateDict, envStateDict)
 
         botStateDict = pushState(p, r, c, bot, botStateDict)
         envStateDict = pushData(p, envStateDict)
 
+
+
+
+        # Simulation
         for each in envStateDict["explored"]:
             shade(each, "#e0e0eb")
         for index, each in enumerate(botStateDict["position"]):
@@ -228,4 +238,5 @@ while(stopFlag == False):
             thingy.remove()
         for each in envStateDict["explored"]:
             shade(each, "#ffffff")
+        # Simulation
 
