@@ -18,10 +18,13 @@ envStateDict:
 - Tree coordinates
 - Completed coordinates
 
+Urgent:
+-- Implement flocking with Simple Flocking in Fav bar
+-- Bot collision check by Kwang Liang (if bot is surrounded by other bots)
+
 Optimization:
 Data structure for coordinate indexing
 -- Sorting in server and Binary Search in bot
--- Bot collision check (if bot is surrounded by other bots)
 """
 
 def getState():
