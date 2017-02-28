@@ -49,6 +49,7 @@ def roleArbiter(bot):
         if workerPercent*copingConstant > treePercent: # Can improve on this
             return "explorer" # Can cope
         else: return "worker" # Cannot cope
+
 def isOutOfBound(position):
     x, y = position
     xmin, xmax, ymin, ymax = boundary # Global variable
@@ -189,7 +190,7 @@ copingConstant = 1
 coverageLevel = 1 # 1 = 3x3, 2 = 5x5 ... etc
 gridBoxSize = 1
 gridCount = 10
-pauseInterval = 0.01
+pauseInterval = 0.5
 boundary = [0, gridCount-1, 0, gridCount-1]
 stopFlag = False
 maxBotCount = 2
