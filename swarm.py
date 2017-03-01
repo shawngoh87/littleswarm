@@ -44,43 +44,19 @@ def pushState(p, r, c, b, bot, botStateDict):
     botStateDict["coverage"][bot] = c
     botStateDict["bearing"][bot] = b
     return botStateDict
-def init():
-    botStateDict = { "position" :   [[5,5],[5,6]],#[6,5],[6,6],[6,7]],
-                     "role"     :   ["explorer"]*maxBotCount,
-                     "bearing"  :   [random.randint(0,7) for n in range(maxBotCount)], # Actually the last direction it travelled
-                     "coverage" :   [0]*maxBotCount}
-    envStateDict = { "explored" : botStateDict["position"][:], # list passed by reference dammit, use [:] #NEVERFORGET
-                     "workable" : [],
-                     "complete" : []}
-    return botStateDict, envStateDict
 def pushData(p, envStateDict):
     """Update envStateDict"""
     if p not in envStateDict["explored"]:
         envStateDict["explored"].append(p)
     return envStateDict
-def roleArbiter(bot):
-    """Return role
-    Things have not taken into account:
-    Is this bot nearest to workable area?
-    Does this bot has better exploration prospect than others?
-    """
-    if envStateDict["workable"] == []:
-        return "explorer"
-    else:
-        workerPercent = botStateDict["role"].count("worker")/maxBotCount
-        treePercent = len(envStateDict["workable"])/len(envStateDict["explored"])
-        if workerPercent*copingConstant > treePercent: # Can improve on this
-            return "explorer" # Can cope
-        else: return "worker" # Cannot cope
-def isOutOfBound(position):
-    x, y = position
-    xmin, xmax, ymin, ymax = boundary # Global variable
-    return x < xmin or x > xmax or y < ymin or y > ymax
-def isCollide(position, botStateDict):
-    if position in botStateDict["position"]:
-        return True
-    else: return False
-
+def checkWorkPath(position):
+    pass
+def snapDirection(dir):
+    """Snap direction to multiples of 45"""
+    dir = round(dir)
+    if dir > 7:
+        return 0
+    else: return dir
 def shade(position, color):
     x, y = position
     currentAxis = plt.gca()
@@ -99,6 +75,29 @@ def checkCoverage(position):
                     count+=1
 
     return count/totalCount
+def roleArbiter(bot):
+    """Return role
+    Things have not taken into account:
+    Is this bot nearest to workable area?
+    Does this bot has better exploration prospect than others?
+    """
+    if envStateDict["workable"] == []:
+        return "explorer"
+    else:
+        workerPercent = botStateDict["role"].count("worker")/maxBotCount
+        treePercent = len(envStateDict["workable"])/len(envStateDict["explored"])
+        if workerPercent*copingConstant > treePercent: # Can improve on this
+            return "explorer" # Can cope
+        else: return "worker" # Cannot cope
+def isOutOfBound(position):
+    x, y = position
+    xmin, xmax, ymin, ymax = boundary # Global variable
+    return x < xmin or x > xmax or y < ymin or y > ymax
+def isCollide(position, botStateDict, bot):
+    notMe = [botStateDict["position"][x] for x in range(maxBotCount) if x != bot]
+    if position in notMe:
+        return True
+    else: return False
 def getNextPosition(position, dir):
     """Return next position
     Use this function to replace global dirDict
@@ -115,9 +114,7 @@ def getNextPosition(position, dir):
         7:[x+1  ,y-1],
         "stay":[x,y]
     }
-    if dir in range(0,8):
-        return dirDict[dir]
-    else: return 8
+    return dirDict[dir]
 def checkExplorePath(position):
     """Returns available directions
     Bearing: 0 - 7 starting from 3 o'clock anti-clockwise
@@ -140,8 +137,6 @@ def checkExplorePath(position):
                 if [xx,yy] not in envStateDict["explored"]:
                     emptyPath.append(dirDict[(xx,yy)])
     return emptyPath
-def checkWorkPath(position):
-    pass
 def chooseExplorePath(position, pathList):
     """Returns the next direction
     from a direction list 0-7
@@ -154,18 +149,7 @@ def chooseExplorePath(position, pathList):
             continue
         else: c[dir] = checkCoverage(nextPos)
     c = sorted(c.items(), key = lambda k:k[1])
-    # if len(c) == 0:
-    #     return 8
-    # else: return c[-1][0] # Return the one with the most coverage
     return c
-
-def snapDirection(dir):
-    """Snap direction to multiples of 45"""
-    dir = round(dir)
-    if dir > 7:
-        return 0
-    else: return dir
-
 def flock(position, botStateDict):
     """Return the flock angles
     Cohesion -- Long range attraction
@@ -179,8 +163,13 @@ def flock(position, botStateDict):
         if abs(xx-x) <= flockRadius and abs(yy-y) <= flockRadius and (abs(xx-x) or abs(yy-y)): # within flockRadius but not origin
             flockPos.append([xx,yy])
             flockDir.append(botStateDict["bearing"][index])
+
     if flockPos == []: # No flockmate :(
-        return 8,8
+        print("No flockmates :(")
+        arr = [0,1,2,3,4,5,6,7,"stay"]
+        random.shuffle(arr)
+        return arr
+    flockDir = [x for x in flockDir if isinstance(x, int)]
 
     # Cohesion
     meanX, meanY = 0, 0
@@ -202,18 +191,32 @@ def flock(position, botStateDict):
 
     # Separation (Not implemented, use bot collision)
 
-    return cohTheta, alignTheta
-
-def decide(p, explorePath, botStateDict):
+    # Total
+    """dir = A*exploreDir + B*cohesionDir + C*separationDir + D*alignmentDir, A+B+C+D = 1"""
+    lengthX = COH*math.cos(cohTheta*0.25*math.pi) + ALG*math.cos(alignTheta*0.25*math.pi)
+    lengthY = COH*math.sin(cohTheta*0.25*math.pi) + ALG*math.sin(alignTheta*0.25*math.pi)
+    finalTheta = math.atan2(lengthY, lengthX)
+    if finalTheta < 0:
+        finalTheta += 360
+    dir = [math.floor(finalTheta/45), math.ceil(finalTheta/45)]
+    for index, i in enumerate(dir):
+        if i == 8:
+            dir[index] = 0
+    dir.insert(0, "stay")
+    return dir
+def decide(p, explorePath, botStateDict, bot):
+    print("BOT: ", bot, " E: ", explorePath)
     if len(explorePath):
-        dir = explorePath.pop()[0]
+        dir = explorePath.pop()
+        if isinstance(dir, tuple):# fix chooseExplorePath to return a ranked list instead of tuple
+            dir = dir[0]
         newPosition = getNextPosition(p, dir)
         if not isOutOfBound(newPosition):
-            if not isCollide(newPosition, botStateDict):
-                return newPosition
-            else: return decide(p, explorePath, botStateDict)
-        else: return decide(p, explorePath, botStateDict)
-    else: return decide(p, [random.randint(0,7)], botStateDict)
+            if not isCollide(newPosition, botStateDict, bot):
+                return dir, newPosition
+            else: return decide(p, explorePath, botStateDict, bot)
+        else: return decide(p, explorePath, botStateDict, bot)
+    else: return decide(p, flock(p, botStateDict), botStateDict, bot) # Flock path is unranked
 
 def calculate(bot, botStateDict, envStateDict):
     p, r, c, b = [botStateDict["position"][bot], botStateDict["role"][bot], botStateDict["coverage"][bot], botStateDict["bearing"][bot]]
@@ -239,7 +242,7 @@ def calculate(bot, botStateDict, envStateDict):
         # else: dir = exploreDir
 
 
-        newPosition = decide(p, explorePath, botStateDict)
+        dir, newPosition = decide(p, explorePath, botStateDict, bot)
         # if dir != 8:
         #     newPosition = getNextPosition(p, dir)
         #     if not isOutOfBound(newPosition):
@@ -277,6 +280,15 @@ def calculate(bot, botStateDict, envStateDict):
 
     return newPosition, newRole, newCoverage, newBearing
 
+def init():
+    botStateDict = { "position" :   [[5,5],[5,6],[6,5],[6,6],[6,7]],
+                     "role"     :   ["explorer"]*maxBotCount,
+                     "bearing"  :   [random.randint(0,7) for n in range(maxBotCount)], # Actually the last direction it travelled
+                     "coverage" :   [0]*maxBotCount}
+    envStateDict = { "explored" : botStateDict["position"][:], # list passed by reference dammit, use [:] #NEVERFORGET
+                     "workable" : [],
+                     "complete" : []}
+    return botStateDict, envStateDict
 
 #------------------------------------MAIN--------------------------------------#
 global coverageLevel
@@ -287,7 +299,7 @@ global boundary
 global flockRadius
 global EXP, COH, ALG
 
-EXP, COH, ALG = 0.95, 0.025, 0.025 # Must add up to 1
+EXP, COH, ALG = 1, 0.5, 0.5 # Must add up to 1 (Now only COH and ALG)
 
 artist = []
 flockRadius = 2
@@ -298,7 +310,7 @@ gridCount = 10
 pauseInterval = 0.001
 boundary = [0, gridCount-1, 0, gridCount-1]
 stopFlag = False
-maxBotCount = 2
+maxBotCount = 5
 roleSwapThreshold = 0.5
 botColor = {0:"red",1:"yellow",2:"blue",3:"green",4:"purple"}
 
@@ -315,6 +327,7 @@ for i in range(maxBotCount):
 
 #-------------------------------LOOP------------------------------------------#
 while(stopFlag == False):
+    # try:
     for bot in range(maxBotCount):
         p, r, c, b = calculate(bot, botStateDict, envStateDict)
         # print("Bot ", bot, " P: ", p, " R: ", r, " C: ", c, " B: ", b)
@@ -336,3 +349,4 @@ while(stopFlag == False):
         for each in envStateDict["explored"]:
             shade(each, "#ffffff")
         # Simulation
+    # except: plt.show()
