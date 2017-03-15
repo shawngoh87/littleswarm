@@ -35,6 +35,8 @@ def getState():
     server = botStateDict
     """
     pass
+def rotate(l, n):
+    return l[n:] + l[:n]
 def pushState(p, r, c, b, bot, botStateDict):
     """Push self state to server
     server = botStateDict
@@ -198,12 +200,28 @@ def flock(position, botStateDict):
     finalTheta = math.atan2(lengthY, lengthX)
     if finalTheta < 0:
         finalTheta += 360
-    dir = [math.floor(finalTheta/45), math.ceil(finalTheta/45)]
-    for index, i in enumerate(dir):
-        if i == 8:
-            dir[index] = 0
+
+    # Original order
+    allDir = [0, 1, 2, 3, 4, 5, 6, 7]
+
+    # Rotated order
+    closestDir = round(finalTheta/45)
+    if closestDir == 8:
+        closestDir = 0
+    allDir = rotate(allDir, closestDir)
+
+    # Execution Order
+    dir = []
+    for i in range(8):
+        if i % 2 == 0:
+            dir.append(allDir.pop(0))
+        else:
+            dir.append(allDir.pop())
+
+    # Added "Stay" option as last resort
     dir.insert(0, "stay")
     return dir
+
 def decide(p, explorePath, botStateDict, bot):
     print("BOT: ", bot, " E: ", explorePath)
     if len(explorePath):
