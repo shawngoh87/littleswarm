@@ -352,9 +352,6 @@ while(stopFlag == False):
         botStateDict = pushState(p, r, c, b, bot, botStateDict)
         envStateDict = pushData(p, envStateDict)
 
-
-
-
         # Simulation
         for each in envStateDict["explored"]:
             shade(each, "#e0e0eb")
