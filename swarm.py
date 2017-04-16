@@ -9,6 +9,9 @@ import random
 import math
 
 from matplotlib.patches import Rectangle
+from pylab import figure, axes, pie, title, show
+from time import gmtime, strftime
+import pylab
 
 """
 botStateDict:
@@ -29,7 +32,8 @@ Optimization:
 Data structure for coordinate indexing
 -- Sorting in server and Binary Search in bot (Sort the Dict after every push, then binary search)
 """
-
+def dist(a,b):
+    return math.hypot(a[0]-b[0], a[1]-b[1])
 def getState():
     """Return all bots' state
     server = botStateDict
@@ -85,12 +89,29 @@ def roleArbiter(bot):
     """
     if envStateDict["workable"] == []:
         return "explorer"
+    if botStateDict["role"][bot] == "worker":
+        if isCollide(botStateDict["position"][bot], botStateDict, bot):
+            return "explorer"
+        print("BOT: ", bot, " ROLE: ", botStateDict["role"][bot], " REMAIN")
+        return "worker"
     else:
-        workerPercent = botStateDict["role"].count("worker")/maxBotCount
-        treePercent = len(envStateDict["workable"])/len(envStateDict["explored"])
-        if workerPercent*copingConstant > treePercent: # Can improve on this
-            return "explorer" # Can cope
-        else: return "worker" # Cannot cope
+        maxWorker = math.floor(len(envStateDict["explored"])*maxBotCount/(gridCount**2))
+        if botStateDict["role"].count("worker") < maxWorker:
+            plantX = sum([x[0] for x in envStateDict["workable"]])
+            plantY = sum([x[1] for x in envStateDict["workable"]])
+            plantX = plantX/len(envStateDict["workable"])
+            plantY = plantY/len(envStateDict["workable"])
+            print("MEAN PLANT LOCATION ", plantX, plantY)
+            if (1-(math.hypot(plantX-botStateDict["position"][bot][0], plantY-botStateDict["position"][bot][1])/math.hypot(gridCount*gridBoxSize, gridCount*gridBoxSize))**2) > random.random():
+                return "worker"
+            else:
+                return "explorer"
+        else: return "explorer"
+        # workerPercent = botStateDict["role"].count("worker")/maxBotCount
+        # treePercent = len(envStateDict["workable"])/len(envStateDict["explored"])
+        # if workerPercent*copingConstant > treePercent: # Can improve on this
+        #     return "explorer" # Can cope
+        # else: return "worker" # Cannot cope
 def isOutOfBound(position):
     x, y = position
     xmin, xmax, ymin, ymax = boundary # Global variable
@@ -223,7 +244,7 @@ def flock(position, botStateDict):
     return dir
 
 def decide(p, explorePath, botStateDict, bot):
-    print("BOT: ", bot, " E: ", explorePath)
+    # print("BOT: ", bot, " E: ", explorePath)
     if len(explorePath):
         dir = explorePath.pop()
         if isinstance(dir, tuple):# fix chooseExplorePath to return a ranked list instead of tuple
@@ -240,6 +261,7 @@ def calculate(bot, botStateDict, envStateDict):
     p, r, c, b = [botStateDict["position"][bot], botStateDict["role"][bot], botStateDict["coverage"][bot], botStateDict["bearing"][bot]]
     # Set new role
     newRole = roleArbiter(bot)
+    print(newRole)
     if newRole == "explorer":
         # Set new explorer position
         pathList = checkExplorePath(p)
@@ -258,8 +280,6 @@ def calculate(bot, botStateDict, envStateDict):
         #     # Should expect vector instead? more accurate
         #     dir = snapDirection(finalTheta/45)
         # else: dir = exploreDir
-
-
         dir, newPosition = decide(p, explorePath, botStateDict, bot)
         # if dir != 8:
         #     newPosition = getNextPosition(p, dir)
@@ -290,22 +310,61 @@ def calculate(bot, botStateDict, envStateDict):
         #         newPosition = getNextPosition(p, dir)
         newBearing = dir
         newCoverage = checkCoverage(newPosition)
+        if newPosition in sample:
+            if newPosition not in envStateDict["workable"] and newPosition not in envStateDict["completed"] :
+                envStateDict["workable"].append(newPosition)
+        return newPosition, newRole, newCoverage, newBearing
 
     elif newRole == "worker":
         # Set new worker position
-        path = checkWorkPath(p)
+        min = dist([gridCount*gridBoxSize, gridCount*gridBoxSize], [0,0])
+        # print(envStateDict["workable"])
+        for each in envStateDict["workable"]:
+            if dist(each, p) <= min:
+                min = dist(each,p)
+                choose = each
+        # print("CHOOSE: ", choose,"STATEDICT:", envStateDict["workable"])
+        newCoverage = 0
+        newBearing = 0
+        if p[0]>choose[0]:
+            if p[1]>choose[1]:
+                newPosition = [p[0]-1,p[1]-1]
+            elif p[1]==choose[1]:
+                newPosition = [p[0]-1,p[1]]
+            else: newPosition = [p[0]-1,p[1]+1]
+        elif p[0]==choose[0]:
+            if p[1]>choose[1]:
+                newPosition = [p[0],p[1]-1]
+            elif p[1]==choose[1]:
+                newPosition = [p[0], p[1]]
+                if isCollide(newPosition, botStateDict, bot):
+                    newRole = "explorer"
+                else:
+                    newRole="explorer"
+                    envStateDict["completed"].append(newPosition)
+                    envStateDict["workable"].remove(newPosition)
+            else: newPosition = [p[0],p[1]+1]
+        else:
+            if p[1]>choose[1]:
+                newPosition = [p[0]+1,p[1]-1]
+            elif p[1]==choose[1]:
+                newPosition = [p[0]+1,p[1]]
+            else: newPosition = [p[0]+1,p[1]+1]
+
+        return newPosition, newRole, newCoverage, newBearing
     else: print("Invalid role.")
 
-    return newPosition, newRole, newCoverage, newBearing
+
+
 
 def init():
-    botStateDict = { "position" :   [[5,5],[5,6],[6,5],[6,6],[6,7]],
+    botStateDict = { "position" :   [[0,0],[0,0],[0,0]],
                      "role"     :   ["explorer"]*maxBotCount,
                      "bearing"  :   [random.randint(0,7) for n in range(maxBotCount)], # Actually the last direction it travelled
                      "coverage" :   [0]*maxBotCount}
     envStateDict = { "explored" : botStateDict["position"][:], # list passed by reference dammit, use [:] #NEVERFORGET
                      "workable" : [],
-                     "complete" : []}
+                     "completed" : []}
     return botStateDict, envStateDict
 
 #------------------------------------MAIN--------------------------------------#
@@ -316,19 +375,24 @@ global copingConstant # Ability of a bot to cope with workable areas
 global boundary
 global flockRadius
 global EXP, COH, ALG
-
+global sample
+sample = [[random.randint(0,4),random.randint(0,4)] for x in range(10)]
+if [0,0]in sample:
+    sample.remove([0,0])
 EXP, COH, ALG = 1, 0.5, 0.5 # Must add up to 1 (Now only COH and ALG)
 
 artist = []
-flockRadius = 2
+flockRadius = 4
 copingConstant = 1
 coverageLevel = 2 # 1 = 3x3, 2 = 5x5 ... etc
 gridBoxSize = 1
-gridCount = 10
-pauseInterval = 0.001
+gridCount = 5
+pauseInterval = 0.01
+iteration = 0
+
 boundary = [0, gridCount-1, 0, gridCount-1]
 stopFlag = False
-maxBotCount = 5
+maxBotCount = 3
 roleSwapThreshold = 0.5
 botColor = {0:"red",1:"yellow",2:"blue",3:"green",4:"purple"}
 
@@ -343,21 +407,37 @@ botStateDict, envStateDict = init()
 for i in range(maxBotCount):
     botStateDict["coverage"][i] = checkCoverage(botStateDict["position"][i])
 
+path = 'img/' + strftime("%H%M%S", gmtime())
+if not os.path.exists(path):
+    os.makedirs(path)
 #-------------------------------LOOP------------------------------------------#
 while(stopFlag == False):
     # try:
+    iteration+=1
     for bot in range(maxBotCount):
         p, r, c, b = calculate(bot, botStateDict, envStateDict)
         # print("Bot ", bot, " P: ", p, " R: ", r, " C: ", c, " B: ", b)
         botStateDict = pushState(p, r, c, b, bot, botStateDict)
         envStateDict = pushData(p, envStateDict)
+        print(envStateDict["completed"])
 
         # Simulation
         for each in envStateDict["explored"]:
             shade(each, "#e0e0eb")
+        for each in envStateDict["workable"]:
+
+            shade(each, "#8cf442")
+        for each in envStateDict["completed"]:
+            shade(each, "#f4be41")
+        for each in sample:
+            artist.append(plt.plot(each[0], each[1], "+", color="black"), )
         for index, each in enumerate(botStateDict["position"]):
-            artist.append(plt.plot(each[0], each[1], ".", color=botColor[index]),)
+            if botStateDict["role"][index] == "explorer":
+                artist.append(plt.plot(each[0], each[1], ".", color=botColor[index]),)
+            else: artist.append(plt.plot(each[0], each[1], "x", color=botColor[index]),)
         plt.pause(pauseInterval)
+
+        pylab.savefig(path +'/'+ str(iteration)+'.png', bbox_inches='tight')
         for n in range(len(artist)):
             thingy, = artist.pop()
             thingy.remove()
