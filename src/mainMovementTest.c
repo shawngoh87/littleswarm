@@ -2,14 +2,21 @@
 #define SPEED_OF_SOUND 0.35 // millimeter per microsecond (default 0.3435)
 #define DIST_TIMEOUT_MM 1000 // Cutoff at 1 meter
 #define ULTRASONIC_TIMEOUT_US 6000 // 2857.14 us x 2
-#define WHEEL_DIAMETER_MM 81
+#define WHEEL_DIAMETER_MM 85.5 // BOT 1: 81     BOT 2: 85.5
 #define DEGREE_PER_PULSE 1.5
 #define PI 3.14159
 #define RESOLUTION ((WHEEL_DIAMETER_MM*PI)/240)
-#define ROBOT_DIAMETER_MM 193
+#define ROBOT_DIAMETER_MM 158 // BOT 1: 178-180 (Actual -> 193)    BOT 2: 158 (Actual -> 158) Tuned for point turning
+#define L_PWM 0.5 // BOT 1: 0.4   BOT 2: 0.421 (0.39-0.45)
+#define R_PWM 0.5 // BOT 1: 0.4   BOT 2: 0.5
 #define SENSOR_OFFSET 120
-#define DETECT_DISTANCE 350
+#define DETECT_DISTANCE 400
+#define DETECT_FILTER_ARRAY_SIZE 8
+#define DETECT_FILTER_CUTOFF_SIZE 2
 #define AVOID_ANGLE PI/4
+#define L_CPS 1
+#define POST_URL "https://lkdnb0wacl.execute-api.us-west-2.amazonaws.com/initial/myresource"
+/* https://CHANGETHISHASH.execute-api.REGION.amazonaws.com/STAGE_NAME/API_NAME */
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)  \
@@ -32,34 +39,40 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/time.h>
+#include "iotkit-comm/cJSON.h"
+#include "curl/curl.h"
 #include "scheduler.h"
 #include "planner.h"
 
-static volatile int readCount = 0, odoCount = 0;
+static volatile int readCount = 0, odoCount = 0, dummyCounter = 0;
 unsigned long long t1, t2;
 long int currentPositionRight = 0, currentPositionLeft = 0, desiredPositionRight = 0, desiredPositionLeft = 0;
 long int errorRight, errorLeft;
-float distance = 0;
-float distanceArray[20];
-unsigned char waitingForEcho = 0, readFlag = 0, robotState = 0;
+unsigned char leftwheel = 0; rightwheel = 0;
+unsigned char waitingForEcho = 0, readFlag = 0, robotState;
 unsigned char leftComplete=1, rightComplete=1, taskComplete, taskPtr;
 unsigned char movementPutPtr=0, movementGetPtr=0, taskPutPtr = 0, taskGetPtr = 0;
 unsigned long long timerCount = 0;
+float targetTheta, currentPWML = L_PWM, currentPWMR = R_PWM;
+float distance = 0, distAVG, distanceArray[20];
+float obstacleArray[10][2], obstacleArrayPtr = 0;
 float taskCurrent[TASK_LENGTH];
 float currentCoordinate[2] = {0,0};
 float theta=PI/2;
-
+/* PID test variables */
+float err0, err1=0, err2=0, err3=0, errDiff=0, errSum=0, output;
 
 void moveForward(float distance){
-	unsigned int pulse = (distance/RESOLUTION);
-	printf("DISTANCE: %.2f\n", distance);
-	desiredPositionRight = currentPositionRight + pulse;
-	desiredPositionLeft = currentPositionLeft + pulse;
+	unsigned int pulseR = (distance/RESOLUTION);
+	unsigned int pulseL = (distance/RESOLUTION)*L_CPS;
+//	printf("DISTANCE: %.2f\n", distance);
+	desiredPositionRight = currentPositionRight + pulseR;
+	desiredPositionLeft = currentPositionLeft + pulseL;
 }
 
 void pointTurn(float angle, unsigned char direction){
 	// Direction: 0: CW, 1: CCW
-	printf("ANGLE: %.2f DIR: %d\n", angle, direction);
+//	printf("ANGLE: %.2f DIR: %d\n", angle, direction);
 	float distance = (fabs(angle)/(2*PI))*PI*ROBOT_DIAMETER_MM;
 	unsigned int pulse = (distance/RESOLUTION);
 	if(direction){//CCW
@@ -87,12 +100,10 @@ void updateOdometry(void){
 	currentCoordinate[1] += (S) * sin(theta+S/ROBOT_DIAMETER_MM);
 	theta += (SR-SL)/(ROBOT_DIAMETER_MM);
 
-	if (theta>6.2832)
-		{printf("MORE THAN\n");
-		theta -= 6.2832;}
-	else if (theta<-6.2832)
-		{printf("LESS THAN\n");
-		theta+=6.2832;}
+	if (theta>2*PI)
+		theta -= 2*PI;
+	else if (theta<-2*PI)
+		theta+=2*PI;
 
 //	fprintf(stdout, "XYT: [%.2f,%.2f,%.2f] CR: %d DR: %d CL: %d DL: %d\n", currentCoordinate[0],currentCoordinate[1],theta,currentPositionRight, desiredPositionRight, currentPositionLeft, desiredPositionLeft);
 }
@@ -200,9 +211,13 @@ void listenEcho(void* pin){
 			diff = t2 - t1;
 			dist = (float)(diff/2 * SPEED_OF_SOUND);
 			distance = dist;
+//			printf("%.2f", distance);
+//			if (distance < 300){
+//				printf(" <-------------- \n");
+//			}else printf("\n");
 			distanceArray[readCount] = dist;
 			readCount++;
-			if (readCount >= 20) {
+			if (readCount >= DETECT_FILTER_ARRAY_SIZE) {
 				readFlag = 1;
 				readCount = 0;
 			}
@@ -365,8 +380,8 @@ int main()
 	mraa_gpio_isr(leftB, edgeISR, &encoder, leftB);
 
 	// PWM config
-	mraa_pwm_period_us(leftPWM, 200);
-	mraa_pwm_period_us(rightPWM, 200);
+	mraa_pwm_period_us(leftPWM, 1000);
+	mraa_pwm_period_us(rightPWM, 1000);
 	mraa_pwm_enable(leftPWM, 0);
 	mraa_pwm_enable(rightPWM, 0);
 
@@ -378,66 +393,138 @@ int main()
 //	Forward: leftDir = 0, rightDir = 0;
 //	Backward: leftDir = 1, rightDir = 1;
 
-//	float arr1[3] = {0,100,0};
-//	taskPut(arr1, 3);
-//	float arr2[3] = {0,100,0};
-//	taskPut(arr2, 3);
-//	float arr3[3] = {0,100,0};
-//	taskPut(arr3, 3);
-//	float arr4[3] = {0,100,0};
-//	taskPut(arr4, 3);
-	float arr1[2] = {0,990};
-	movementPut(arr1, 2);
-//	float arr2[2] = {1490,1490};
+	/* Test Sequence: Calculated */
+//	float arr1[2] = {0,975};
+//	movementPut(arr1, 2);
+//	float arr2[2] = {325,0};
 //	movementPut(arr2, 2);
-//	float arr3[2] = {330,0};
+//	float arr3[2] = {325,325};
 //	movementPut(arr3, 2);
 //	float arr4[2] = {0,0};
 //	movementPut(arr4, 2);
 
-	// DEBUG ZONE
+	/* Test Sequence: Absolute */
+//	float arr1[3] = {0,325,0};
+//	taskPut(arr1, 3);
+//	float arr2[3] = {1,3*PI/4,0};
+//	taskPut(arr2, 3);
+//	float arr3[3] = {0,459.62,0};
+//	taskPut(arr3, 3);
+//	float arr4[3] = {1,3*PI/4,1};
+//	taskPut(arr4, 3);
+//	float arr5[3] = {0,325,0};
+//	taskPut(arr5, 3);
+//	float arr6[3] = {1,3*PI/4,1};
+//	taskPut(arr6, 3);
+//	float arr7[3] = {0,459.62,0};
+//	taskPut(arr7, 3);
+//	float arr8[3] = {1,3*PI/4,0};
+//	taskPut(arr8, 3);
 
+	/* Test Sequence: Scanning */
+//	int k;
+//	for (k = 0;k < 8; k++){
+//		float arr2[3] = {2,PI/4,0};
+//		taskPut(arr2, 3);
+//	}
+
+	/* Test Sequence: Misc */
+//	float arr2[3] = {1,2*PI,0};
+//	taskPut(arr2, 3);
+//
+//	float arr3[3] = {1,2*PI,0};
+//	taskPut(arr3, 3);
+//
+//	float arr4[3] = {1,2*PI,0};
+//	taskPut(arr4, 3);
+	float arr3[3] = {0,975,0};
+	taskPut(arr3, 3);
+//	float arr4[3] = {0,325,0};
+//	taskPut(arr4, 3);
+
+	// DEBUG ZONE
+//	while(1){
+//		if (readFlag){
+//			qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
+//			float avg = 0;
+//			int i;
+//			for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
+//				avg += distanceArray[i];
+//			}
+//			distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
+//			printf("AVERAGE: %.2f\n", distAVG);
+//			readFlag=0;
+//		}
+//		else pulse(trig);
+//		if (distAVG < DETECT_DISTANCE){
+//			printf("AAH SOMETHING!! GOTTA MAKE SURE\n");
+//		}
+//
+//	}
 	// DEBUG ZONE END
 
 	// Loop
+//	initGrid();
+//	updateState((int)round(currentCoordinate[0]/GRID_LENGTH),(int)round(currentCoordinate[1]/GRID_LENGTH), 1);
+//	viewGrid(0);
+//	while(1);
+	srand(time(NULL));
 	while (1){
-		float nextMove[2];
-		if (movementGet(nextMove, 2) == 0){
-			float dx = nextMove[0] - currentCoordinate[0];
-			float dy = nextMove[1] - currentCoordinate[1];
-			setDirection(dx, dy);
-		}
-		else{
-			fprintf(stdout, "EMPTY MOVEMENT LIST\n");
-			mraa_pwm_enable(leftPWM, 0);
-			mraa_pwm_enable(rightPWM, 0);
-			return MRAA_SUCCESS;
-		}
+//		float nextMove[2];
+//		if (movementGet(nextMove, 2) == 0){
+//			float dx = nextMove[0] - currentCoordinate[0];
+//			float dy = nextMove[1] - currentCoordinate[1];
+//			setDirection(dx, dy);
+//		}
+//		else{
+//			fprintf(stdout, "EMPTY MOVEMENT LIST\n");
+//			mraa_pwm_enable(leftPWM, 0);
+//			mraa_pwm_enable(rightPWM, 0);
+//			return MRAA_SUCCESS;
+//		}
 
 		while (taskGet(taskCurrent,TASK_LENGTH) == 0){ // Has task
 
 			switch((int)taskCurrent[0]){
 				case 0: // Format: [0,distance,_]
 					moveForward(taskCurrent[1]);
+					robotState = 0;
+					targetTheta = theta; // latch current theta for control reference
 					leftComplete = rightComplete = taskComplete = 0;
-					mraa_pwm_write(leftPWM, 0.4);
-					mraa_pwm_write(rightPWM, 0.4);
-					fprintf(stdout, "Moving forward\n");
+					mraa_pwm_write(leftPWM, L_PWM);
+					mraa_pwm_write(rightPWM, R_PWM);
+//					fprintf(stdout, "Moving forward\n");
 					break;
-				case 1: // Format: [1,angle,directionCCW]
+				case 1: // Format: [1,angle,directionCCW] Point turning
 					pointTurn(taskCurrent[1], taskCurrent[2]);
+					robotState = 1;
 					leftComplete = rightComplete = taskComplete = 0;
-					mraa_pwm_write(leftPWM, 0.4);
-					mraa_pwm_write(rightPWM, 0.4);
-					fprintf(stdout, "Turning pivot\n");
+					mraa_pwm_write(leftPWM, L_PWM);
+					mraa_pwm_write(rightPWM, R_PWM);
+//					fprintf(stdout, "Turning pivot\n");
 					break;
+				case 2: // Format: [2,angle,directionCCW] Point turning + Scanning
+					pointTurn(taskCurrent[1], taskCurrent[2]);
+					robotState = 2;
+					leftComplete = rightComplete = taskComplete = 0;
+					mraa_pwm_write(leftPWM, L_PWM);
+					mraa_pwm_write(rightPWM, R_PWM);
+//					fprintf(stdout, "Turning pivot and scan\n");
+					break;
+
 			}
 
 			usleep(500000);
 			while(taskComplete == 0){
+				// Motion loop
 				errorLeft = desiredPositionLeft - currentPositionLeft;
 				errorRight = desiredPositionRight - currentPositionRight;
-				if (leftComplete == 0){
+				if ((errorLeft > -3) && (errorLeft < 3)){
+					mraa_pwm_enable(leftPWM, 0);
+					leftComplete = 1;
+				}
+				else {
+					leftComplete = 0;
 					if (errorLeft > 0){
 						mraa_pwm_enable(leftPWM, 1);
 						mraa_gpio_write(leftDir, 0);
@@ -446,13 +533,13 @@ int main()
 						mraa_pwm_enable(leftPWM, 1);
 						mraa_gpio_write(leftDir, 1);
 					}
-					if (errorLeft == 0){
-						mraa_pwm_enable(leftPWM, 0);
-						leftComplete = 1;
-//						fprintf(stdout, "LEFT COMPLETE\n");
-					}
 				}
-				if (rightComplete == 0){
+				if ((errorRight > -3) && (errorRight < 3)){
+					mraa_pwm_enable(rightPWM, 0);
+					rightComplete = 1;
+				}
+				else {
+					rightComplete = 0;
 					if (errorRight > 0){
 						mraa_pwm_enable(rightPWM, 1);
 						mraa_gpio_write(rightDir, 0);
@@ -461,189 +548,156 @@ int main()
 						mraa_pwm_enable(rightPWM, 1);
 						mraa_gpio_write(rightDir, 1);
 					}
-					if (errorRight == 0){
-						mraa_pwm_enable(rightPWM, 0);
-						rightComplete = 1;
-//						fprintf(stdout, "RIGHT COMPLETE\n");
-					}
 				}
-				pulse(trig);
 				if((leftComplete==1) && (rightComplete==1)){
 					taskComplete = 1;
 					updateOdometry();
 					fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.2f]\n", currentCoordinate[0], currentCoordinate[1], theta);
 				}
-				odoCount++;
-				if (odoCount % 15 == 0)
-					updateOdometry();
-				if (readFlag){
-					switch(robotState){
-						case 0: // normal movement
-							qsort(distanceArray, 20, sizeof(distanceArray[0]), compare);
-							float avg = 0;
-							int i;
-							for (i = 5; i < 15; i++){
-								avg += distanceArray[i];
-							}
-							avg = avg/10;
-//							printf("AVERAGE: %.2f\n", avg);
-							if (avg<(DETECT_DISTANCE+SENSOR_OFFSET)){
-		//						if (avg < (SENSOR_OFFSET + 50)){
-								mraa_pwm_enable(leftPWM, 0);
-								mraa_pwm_enable(rightPWM, 0);
-								fprintf(stdout, "DETECTED, XYT:[%.2f,%.2f,%.2f]\n", currentCoordinate[0], currentCoordinate[1], theta);
-								float objX, objY;
-								objX = currentCoordinate[0] + (avg+SENSOR_OFFSET)*cos(theta);
-								objY = currentCoordinate[1] + (avg+SENSOR_OFFSET)*sin(theta);
-								fprintf(stdout, "OBJECT, XY:[%.2f,%.2f]\n", objX, objY);
 
-								robotState = 1;
-							}
-							else{robotState = 0;}
-							break;
-						case 1: // go around the object;
-							taskGetPtr = taskPutPtr;
-							float avoidX, avoidY, recoverX, recoverY, L;
-							L = avg/(cos(AVOID_ANGLE));
-							avoidX = currentCoordinate[0]+L*cos(theta+AVOID_ANGLE);
-							avoidY = currentCoordinate[1]+L*sin(theta+AVOID_ANGLE);
-							recoverX = nextMove[0];
-							recoverY = nextMove[1];
-							float arr5[2] = {avoidX, avoidY};
-							movementPut(arr5, 2);
-							float arr6[2] = {recoverX, recoverY};
-							movementPut(arr6, 2);
-							if (movementGet(nextMove, 2) == 0){
-								float dx = nextMove[0] - currentCoordinate[0];
-								float dy = nextMove[1] - currentCoordinate[1];
-								setDirection(dx, dy);
-							}
-							while (taskGet(taskCurrent,TASK_LENGTH) == 0){ // Has task
+//				if (leftComplete == 0){
+//					if (errorLeft > 0){
+//						mraa_pwm_enable(leftPWM, 1);
+//						mraa_gpio_write(leftDir, 0);
+//					}
+//					if (errorLeft < 0){
+//						mraa_pwm_enable(leftPWM, 1);
+//						mraa_gpio_write(leftDir, 1);
+//					}
+//					if (errorLeft == 0){
+//						mraa_pwm_enable(leftPWM, 0);
+//						leftComplete = 1;
+////						fprintf(stdout, "LEFT COMPLETE\n");
+//					}
+//				}
+//				if (rightComplete == 0){
+//					if (errorRight > 0){
+//						mraa_pwm_enable(rightPWM, 1);
+//						mraa_gpio_write(rightDir, 0);
+//					}
+//					if (errorRight < 0){
+//						mraa_pwm_enable(rightPWM, 1);
+//						mraa_gpio_write(rightDir, 1);
+//					}
+//					if (errorRight == 0){
+//						mraa_pwm_enable(rightPWM, 0);
+//						rightComplete = 1;
+////						fprintf(stdout, "RIGHT COMPLETE\n");
+//					}
+//				}
+//				if((leftComplete==1) && (rightComplete==1)){
+//					taskComplete = 1;
+//					updateOdometry();
+//					fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.2f]\n", currentCoordinate[0], currentCoordinate[1], theta);
+//				}
 
-								switch((int)taskCurrent[0]){
-									case 0: // Format: [0,distance,_]
-										moveForward(taskCurrent[1]);
-										leftComplete = rightComplete = taskComplete = 0;
-										mraa_pwm_write(leftPWM, 0.4);
-										mraa_pwm_write(rightPWM, 0.4);
-										fprintf(stdout, "Moving forward\n");
-										break;
-									case 1: // Format: [1,angle,directionCCW]
-										pointTurn(taskCurrent[1], taskCurrent[2]);
-										leftComplete = rightComplete = taskComplete = 0;
-										mraa_pwm_write(leftPWM, 0.4);
-										mraa_pwm_write(rightPWM, 0.4);
-										fprintf(stdout, "Turning pivot\n");
-										break;
-								}
+				// PID control
+				if (robotState == 0){ // It is
 
-								usleep(500000);
-								while(taskComplete == 0){
-									errorLeft = desiredPositionLeft - currentPositionLeft;
-									errorRight = desiredPositionRight - currentPositionRight;
-									if (leftComplete == 0){
-										if (errorLeft > 0){
-											mraa_pwm_enable(leftPWM, 1);
-											mraa_gpio_write(leftDir, 0);
-										}
-										if (errorLeft < 0){
-											mraa_pwm_enable(leftPWM, 1);
-											mraa_gpio_write(leftDir, 1);
-										}
-										if (errorLeft == 0){
-											mraa_pwm_enable(leftPWM, 0);
-											leftComplete = 1;
-					//						fprintf(stdout, "LEFT COMPLETE\n");
-										}
-									}
-									if (rightComplete == 0){
-										if (errorRight > 0){
-											mraa_pwm_enable(rightPWM, 1);
-											mraa_gpio_write(rightDir, 0);
-										}
-										if (errorRight < 0){
-											mraa_pwm_enable(rightPWM, 1);
-											mraa_gpio_write(rightDir, 1);
-										}
-										if (errorRight == 0){
-											mraa_pwm_enable(rightPWM, 0);
-											rightComplete = 1;
-					//						fprintf(stdout, "RIGHT COMPLETE\n");
-										}
-									}
-									pulse(trig);
-									if((leftComplete==1) && (rightComplete==1)){
-										taskComplete = 1;
-										updateOdometry();
-										fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.2f]\n", currentCoordinate[0], currentCoordinate[1], theta);
-									}
-									odoCount++;
-									if (odoCount % 15 == 0)
-										updateOdometry();
-								}
-							}
-							robotState = 0;
-							break;
-					}
-					readFlag = 0;
 				}
+				if (odoCount % 10 == 0){
+					float scale=0.1, P=0.1, I=0, D=0.1;
+					err0 = targetTheta - theta;
+					errDiff = err3 - err0;
+					errSum += err0;
+					if (errSum > 2) errSum = 2;
+					else if (errSum < -2) errSum = -2;
+					if ((err0>-0.02)&&(err0<0.02)) errSum = 0;
+					output = P*err0 + I*errSum + D*errDiff;
+	//				printf("L: %.2f R: %.2f Target: %.2f Current: %.2f\n", currentPWML, currentPWMR, targetTheta, theta);
+					if (odoCount % 5 == 0)
+	//					printf("L: %.2f R: %.2f OUTPUT: %.2f THETA: %.2f\n", currentPWML, currentPWMR, output, theta);
+						printf("P: %.2f I: %.2f D: %.2f OUTPUT: %.2f L: %.2f R: %.2f\n", err0, errSum, errDiff, output, currentPWML, currentPWMR);
+					if (output<0){
+						output = (-output);
+						currentPWML += scale*output;
+						currentPWMR -= scale*output;
+					}
+					else if (output>0){
+						currentPWML -= scale*output;
+						currentPWMR += scale*output;
+					}
+					if (currentPWML > 0.65) currentPWML = 0.65;
+					else if (currentPWML < 0.35) currentPWML = 0.35;
+					if (currentPWMR > 0.65) currentPWMR = 0.65;
+					else if (currentPWMR < 0.35) currentPWMR = 0.35;
+					mraa_pwm_write(leftPWM, currentPWML);
+					mraa_pwm_write(rightPWM, currentPWMR);
+
+					err3 = err2;
+					err2 = err1;
+					err1 = err0;
+				}
+
+//				if (odoCount % 1 == 0){
+//					if (theta > targetTheta){
+//						currentPWML += 0.001;
+//						currentPWMR -= 0.001;
+//						mraa_pwm_write(leftPWM, currentPWML);
+//						mraa_pwm_write(rightPWM, currentPWMR);
+//					}
+//					else if (theta < targetTheta){
+//						currentPWML -= 0.001;
+//						currentPWMR += 0.001;
+//						mraa_pwm_write(leftPWM, currentPWML);
+//						mraa_pwm_write(rightPWM, currentPWMR);
+//					}
+//				}
+//				printf("L: %.2f R: %.2f Target: %.2f Current: %.2f\n", currentPWML, currentPWMR, targetTheta, theta);
+
+				// Obstacle detection loop
+//				if (readFlag){
+//					qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
+//					float avg = 0;
+//					int i;
+//					for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
+//						avg += distanceArray[i];
+//					}
+//					distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
+////					printf("AVERAGE: %.2f\n", distAVG);
+//					printf("%.2f      ", distAVG);
+//					if (distAVG < 300){
+//						printf(" <-------------- \n");
+//					}else printf("\n");
+//
+////					printf("%.2f\n", distance);
+//					dummyCounter++;
+//					readFlag=0;
+//				}
+//				else pulse(trig);
+
+				// Decision loop
+//				if (distAVG < DETECT_DISTANCE){
+//					printf("AAH SOMETHING!! GOTTA MAKE SURE\n"); // Send OBSTACLE LOCATION and STUCK MODE to server
+//					switch(robotState){
+//						case 0: // Avoidance
+//							break;
+//						case 1: // Scanning
+//
+//							break;
+//
+//					}
+//				}
+//				switch(robotState){
+//					case 0: // Avoidance
+//						if(distAVG < DETECT_DISTANCE){
+//							printf("AAH SOMETHING!! GOTTA MAKE SURE\n");
+//						}
+//						break;
+//					case 1: // Scanning
+////						dummyCounter++;
+////						printf("%.2f\n", distAVG);
+//						break;
+//				}
+
+				// Odometry update loop
+				odoCount++;
+				if (odoCount % 7 == 0)
+					updateOdometry();
 			}
 		}
+		return MRAA_SUCCESS;
 	}
 	return MRAA_SUCCESS;
 }
-
-// LEGACY CODE: Multiple POSIX timer
-//
-//
-//timer_t firstTimerID;
-//timer_t secondTimerID;
-//timer_t thirdTimerID;
-//makeTimer(&firstTimerID, 2, 2); //2ms
-//makeTimer(&secondTimerID, 10, 10); //10ms
-//makeTimer(&thirdTimerID, 100, 100); //100ms
-//
-//static void timerHandler( int sig, siginfo_t *si, void *uc )
-//{
-//    timer_t *tidp;
-//
-//    tidp = si->si_value.sival_ptr;
-//
-//    if ( *tidp == firstTimerID )
-//        fprintf(stdout, "2ms\n");
-//    else if ( *tidp == secondTimerID )
-//        fprintf(stdout, "10ms\n");
-//    else if ( *tidp == thirdTimerID )
-//        fprintf(stdout, "100ms\n");
-//}
-//
-//static int makeTimer( timer_t *timerID, int expireMS, int intervalMS )
-//{
-//    struct sigevent te;
-//    struct itimerspec its;
-//    struct sigaction sa;
-//    int sigNo = SIGRTMIN;
-//
-//    /* Set up signal handler. */
-//    sa.sa_flags = SA_SIGINFO;
-//    sa.sa_sigaction = timerHandler;
-//    sigemptyset(&sa.sa_mask);
-//    if (sigaction(sigNo, &sa, NULL) == -1) {
-//        perror("sigaction");
-//    }
-//
-//    /* Set and enable alarm */
-//    te.sigev_notify = SIGEV_SIGNAL;
-//    te.sigev_signo = sigNo;
-//    te.sigev_value.sival_ptr = timerID;
-//    timer_create(CLOCK_REALTIME, &te, timerID);
-//
-//    its.it_interval.tv_sec = 0;
-//    its.it_interval.tv_nsec = intervalMS * 1000000;
-//    its.it_value.tv_sec = 0;
-//    its.it_value.tv_nsec = expireMS * 1000000;
-//    timer_settime(*timerID, 0, &its, NULL);
-//
-//    return 1;
-//}
 

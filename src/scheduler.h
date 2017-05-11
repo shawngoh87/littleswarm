@@ -8,8 +8,8 @@
 #ifndef SCHEDULER_H_
 #define SCHEDULER_H_
 
-#define TASK_QUEUE_SIZE 15
-#define MOVEMENT_QUEUE_SIZE 15
+#define TASK_QUEUE_SIZE 40
+#define MOVEMENT_QUEUE_SIZE 40
 #define TASK_LENGTH 3
 
 extern unsigned char movementPutPtr, movementGetPtr, taskPutPtr, taskGetPtr;

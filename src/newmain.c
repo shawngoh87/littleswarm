@@ -1,27 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
-#define SPEED_OF_SOUND 0.35 // millimeter per microsecond (default 0.3435)
-#define DIST_TIMEOUT_MM 1000 // Cutoff at 1 meter
-#define ULTRASONIC_TIMEOUT_US 6000 // 2857.14 us x 2
-#define WHEEL_DIAMETER_MM 81
-#define DEGREE_PER_PULSE 1.5
-#define PI 3.14159
-#define RESOLUTION ((WHEEL_DIAMETER_MM*PI)/240)
-#define ROBOT_DIAMETER_MM 193
-#define SENSOR_OFFSET 120
-#define DETECT_DISTANCE 400
-#define AVOID_ANGLE PI/4
-
-#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
-#define BYTE_TO_BINARY(byte)  \
-  (byte & 0x80 ? '1' : '0'), \
-  (byte & 0x40 ? '1' : '0'), \
-  (byte & 0x20 ? '1' : '0'), \
-  (byte & 0x10 ? '1' : '0'), \
-  (byte & 0x08 ? '1' : '0'), \
-  (byte & 0x04 ? '1' : '0'), \
-  (byte & 0x02 ? '1' : '0'), \
-  (byte & 0x01 ? '1' : '0')
-
 #include <mraa.h>
 #include <time.h>
 #include <math.h>
@@ -35,13 +11,43 @@
 #include "scheduler.h"
 #include "planner.h"
 
+#define _POSIX_C_SOURCE 200809L
+#define SPEED_OF_SOUND 0.35 // millimeter per microsecond (default 0.3435)
+#define DIST_TIMEOUT_MM 1000 // Cutoff at 1 meter
+#define ULTRASONIC_TIMEOUT_US 6000 // 2857.14 us x 2
+#define WHEEL_DIAMETER_MM 85.5 // BOT 1: 81     BOT 2: 85.5
+#define DEGREE_PER_PULSE 1.5
+#define PI 3.1415927
+#define RESOLUTION ((WHEEL_DIAMETER_MM*PI)/240)
+#define ROBOT_DIAMETER_MM 156 // BOT 1: 178-180 (Actual -> 193)    BOT 2: 158 (Actual -> 158) Tuned for point turning
+#define L_PWM 0.45 // BOT 1: 0.4   BOT 2: 0.415 (0.39-0.45)
+#define R_PWM 0.5 // BOT 1: 0.4   BOT 2: 0.5
+#define SENSOR_OFFSET 120
+#define DETECT_DISTANCE sqrt(2*(GRID_LENGTH/2)*(GRID_LENGTH/2))
+#define DETECT_FILTER_ARRAY_SIZE 8
+#define DETECT_FILTER_CUTOFF_SIZE 2
+#define SCAN_COUNT 8 // Number of discrete stationary scans in a circle
+#define AVOID_ANGLE PI/4
+
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0')
+
+
 static volatile int readCount = 0, odoCount = 0;
 unsigned long long t1, t2;
 long int currentPositionRight = 0, currentPositionLeft = 0, desiredPositionRight = 0, desiredPositionLeft = 0;
 long int errorRight, errorLeft;
-float distance = 0;
-float distanceArray[20];
-unsigned char waitingForEcho = 0, readFlag = 0, robotState = 0;
+float distance = 0, distanceArray[DETECT_FILTER_ARRAY_SIZE], distAVG;
+float obstacleArray[10][2], obstacleArrayPtr = 0;
+unsigned char waitingForEcho = 0, readFlag = 0, robotState = 0, scanOnCompletion;
 unsigned char leftComplete=1, rightComplete=1, taskComplete, taskPtr;
 unsigned char movementPutPtr=0, movementGetPtr=0, taskPutPtr = 0, taskGetPtr = 0;
 unsigned long long timerCount = 0;
@@ -200,7 +206,7 @@ void listenEcho(void* pin){
 			distance = dist;
 			distanceArray[readCount] = dist;
 			readCount++;
-			if (readCount >= 20) {
+			if (readCount >= DETECT_FILTER_ARRAY_SIZE) {
 				readFlag = 1;
 				readCount = 0;
 			}
@@ -393,35 +399,55 @@ int main()
 //	float arr4[2] = {0,0};
 //	movementPut(arr4, 2);
 
-	// DEBUG ZONE
+	/* DEBUG ZONE */
 
-	// DEBUG ZONE END
+//	while(1);
+	/* DEBUG ZONE END */
 
 	// Loop
 	initGrid();
+	srand(time(NULL));
 	while (1){
 		float nextMove[2];
 		int *gridGet;
-		if (1){ // If not avoiding obstacles
+		if (!scanOnCompletion){ // If not avoiding obstacles
+			printf("CURRENT: X: %.2f Y: %.2f\n", currentCoordinate[0], currentCoordinate[1]);
+			updateState((int)round(currentCoordinate[0]/GRID_LENGTH),(int)round(currentCoordinate[1]/GRID_LENGTH), 1);
 			gridGet = planGrid((int)round(currentCoordinate[0]/GRID_LENGTH),(int)round(currentCoordinate[1]/GRID_LENGTH));
-			if (gridGet[0] != -1){
+			updateState((int)round(gridGet[0]/GRID_LENGTH),(int)round(gridGet[1]/GRID_LENGTH), 0);
+			if (gridGet[0] != -1){ // Not flocking
+				scanOnCompletion = SCAN_COUNT;
 				nextMove[0] = (float)gridGet[0];
 				nextMove[1] = (float)gridGet[1];
 				movementPut(nextMove, 2);
 				printf("NEXT COORDINATE: %.2f, %.2f\n", nextMove[0], nextMove[1]);
 			}
+			else{
+				// Flocking code
+				scanOnCompletion = 0;
+			}
+
+			if (movementGet(nextMove, 2) == 0){
+				float dx = nextMove[0] - currentCoordinate[0];
+				float dy = nextMove[1] - currentCoordinate[1];
+				setDirection(dx, dy);
+			}
+			else{
+				fprintf(stdout, "EMPTY MOVEMENT LIST\n");
+				mraa_pwm_enable(leftPWM, 0);
+				mraa_pwm_enable(rightPWM, 0);
+				return MRAA_SUCCESS;
+			}
 		}
-		if (movementGet(nextMove, 2) == 0){
-			float dx = nextMove[0] - currentCoordinate[0];
-			float dy = nextMove[1] - currentCoordinate[1];
-			setDirection(dx, dy);
+		else { // Scanning
+			int k;
+			for (k = 0;k < 8; k++){
+				float arr[3] = {2,PI/4,0};
+				taskPut(arr, 3);
+			}
 		}
-		else{
-			fprintf(stdout, "EMPTY MOVEMENT LIST\n");
-			mraa_pwm_enable(leftPWM, 0);
-			mraa_pwm_enable(rightPWM, 0);
-			return MRAA_SUCCESS;
-		}
+
+
 
 		while (taskGet(taskCurrent,TASK_LENGTH) == 0){ // Has task
 
@@ -429,16 +455,25 @@ int main()
 				case 0: // Format: [0,distance,_]
 					moveForward(taskCurrent[1]);
 					leftComplete = rightComplete = taskComplete = 0;
-					mraa_pwm_write(leftPWM, 0.4);
-					mraa_pwm_write(rightPWM, 0.4);
+					mraa_pwm_write(leftPWM, L_PWM);
+					mraa_pwm_write(rightPWM, R_PWM);
 //					fprintf(stdout, "Moving forward\n");
 					break;
-				case 1: // Format: [1,angle,directionCCW]
+				case 1: // Format: [1,angle,directionCCW] Point turning
 					pointTurn(taskCurrent[1], taskCurrent[2]);
+					robotState = 0;
 					leftComplete = rightComplete = taskComplete = 0;
-					mraa_pwm_write(leftPWM, 0.4);
-					mraa_pwm_write(rightPWM, 0.4);
+					mraa_pwm_write(leftPWM, L_PWM);
+					mraa_pwm_write(rightPWM, R_PWM);
 //					fprintf(stdout, "Turning pivot\n");
+					break;
+				case 2: // Format: [2,angle,directionCCW] Point turning + Scanning
+					pointTurn(taskCurrent[1], taskCurrent[2]);
+					robotState = 1;
+					leftComplete = rightComplete = taskComplete = 0;
+					mraa_pwm_write(leftPWM, L_PWM);
+					mraa_pwm_write(rightPWM, R_PWM);
+//					fprintf(stdout, "Turning pivot and scan\n");
 					break;
 			}
 
@@ -479,14 +514,47 @@ int main()
 				if((leftComplete==1) && (rightComplete==1)){
 					taskComplete = 1;
 					updateOdometry();
+					if(scanOnCompletion) scanOnCompletion--;
 //					fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.2f]\n", currentCoordinate[0], currentCoordinate[1], theta);
 				}
+
+
+//				// Obstacle detection loop
+//				pulse(trig);
+//				if (readFlag){
+//					qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
+//					float avg = 0;
+//					int i;
+//					for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
+//						avg += distanceArray[i];
+//					}
+//					distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
+////					printf("%.2f      ", distAVG);
+////					if (distAVG < 300){
+////						printf(" <-------------- \n");
+////					}else printf("\n");
+////					dummyCounter++;
+//					readFlag=0;
+//				}
+//
+//				// Decision loop
+//				if (distAVG < DETECT_DISTANCE - SENSOR_OFFSET){
+//					printf("\nSomething X: %.2f Y: %.2f \n", \
+//							currentCoordinate[0] + (distAVG+SENSOR_OFFSET)*cos(theta), \
+//							currentCoordinate[1] + (distAVG+SENSOR_OFFSET)*sin(theta));
+//					if (scanOnCompletion){
+//						printf("Scanning Angle: %d\n", scanOnCompletion);
+//					}
+//				}
+
+
+
+				// Odometry update loop
 				odoCount++;
 				if (odoCount % 15 == 0)
 					updateOdometry();
 			}
 		}
-		setGrid((int)round(currentCoordinate[0]/GRID_LENGTH),(int)round(currentCoordinate[1]/GRID_LENGTH));
 		viewGrid(0);
 	}
 	return MRAA_SUCCESS;

@@ -93,7 +93,6 @@ int main(){
 	for (j=GRID_SIZE-1;j>=0;j--){
 		for (i=0;i<GRID_SIZE;i++){
 			printf("%d ", cellState[i][j]);
-
 		}
 		printf("\n");
 	}
