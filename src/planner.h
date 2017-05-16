@@ -8,10 +8,12 @@
 #ifndef PLANNER_H_
 #define PLANNER_H_
 
-#define GRID_LENGTH 400
+#define GRID_LENGTH 650
 #define GRID_SIZE 2
 #define CHECK_SIZE 3
-#define URL_UPDATE "https://hxzhpp8ds6.execute-api.us-west-2.amazonaws.com/deployed/map-state"
+#define URL_MAP_UPDATE "https://hxzhpp8ds6.execute-api.us-west-2.amazonaws.com/deployed/map-state"
+#define URL_BOT_UPDATE "https://hxzhpp8ds6.execute-api.us-west-2.amazonaws.com/deployed/bot-state"
+#define URL_OBSTACLE_UPDATE "https://hxzhpp8ds6.execute-api.us-west-2.amazonaws.com/deployed/obstacle-state"
 
 #include <stdio.h>
 #include <time.h>
@@ -26,6 +28,7 @@ int* planGrid(int x, int y);
 void viewGrid(int mode);
 void setGrid(int x, int y);
 void clearGrid(int x, int y);
-void updateState(int xx, int yy, int parseFlag);
+void updateMap(int xx, int yy, int parseFlag);
+void updateObstacle(float xx, float yy, int cleared, int parseFlag);
 
 #endif /* PLANNER_H_ */

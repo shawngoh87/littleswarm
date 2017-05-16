@@ -98,7 +98,7 @@ char* curl_operation(cJSON* post_json, char* post_url){
 	return chunk.memory;
 }
 
-void updateState(int xx, int yy, int parseFlag){
+void updateMap(int xx, int yy, int parseFlag){
 	/* Curl&cJSON function by JZ
 	 * param:
 	 * -- URL_UPDATE (global var)	: url for database API's HTTPS endpoint.
@@ -112,7 +112,7 @@ void updateState(int xx, int yy, int parseFlag){
 	cJSON_AddStringToObject(payload, "x", strX);
 	cJSON_AddStringToObject(payload, "y", strY);
 	cJSON_AddStringToObject(payload, "explored", "1");
-	char* response = curl_operation(payload, URL_UPDATE);
+	char* response = curl_operation(payload, URL_MAP_UPDATE);
 //	printf("\nResponse from AWS:\n%s",response);
 
 	if (parseFlag){
@@ -129,6 +129,34 @@ void updateState(int xx, int yy, int parseFlag){
 				setGrid(x, y);
 			}
 		}
+	}
+}
+
+void updateObstacle(float xx, float yy, int cleared, int parseFlag){
+	cJSON *payload = NULL;
+	payload = cJSON_CreateObject();
+	char* strX[10], strY[10];
+	sprintf(strX, "%.3f", xx);
+	sprintf(strY, "%.3f", yy);
+	cJSON_AddStringToObject(payload, "x", strX);
+	cJSON_AddStringToObject(payload, "y", strY);
+	if(cleared) cJSON_AddStringToObject(payload, "cleared", "1");
+	else cJSON_AddStringToObject(payload, "cleared", "0");
+	char* response = curl_operation(payload, URL_OBSTACLE_UPDATE);
+//	printf("\nResponse from AWS:\n%s",response);
+	if (parseFlag){
+		cJSON *body = cJSON_GetObjectItem(cJSON_Parse(response), "Items");
+		int cellCount = cJSON_GetObjectItem(cJSON_Parse(response), "Count")->valueint;
+		int i;
+		for (i = 0; i < cellCount; i++){
+			cJSON *cell = cJSON_GetArrayItem(body,i);
+			char* ptr;
+			float x = strtof(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "x"),"N")->valuestring, &ptr);
+			float y = strtof(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "y"),"N")->valuestring, &ptr);
+			int clr = strtol(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "cleared"),"N")->valuestring, &ptr, 10);
+//			printf("%.3f, %.3f, %d\n", x, y, clr);
+		}
+//		printf("%s\n", cJSON_Print(body, 4));
 	}
 }
 

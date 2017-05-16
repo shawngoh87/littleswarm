@@ -26,7 +26,7 @@
 #define DETECT_DISTANCE sqrt(2*(GRID_LENGTH/2)*(GRID_LENGTH/2))
 #define DETECT_FILTER_ARRAY_SIZE 8
 #define DETECT_FILTER_CUTOFF_SIZE 2
-#define SCAN_COUNT 8 // Number of discrete stationary scans in a circle
+#define SCAN_COUNT 16 // Number of discrete stationary scans in a circle
 #define AVOID_ANGLE PI/4
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
@@ -444,8 +444,8 @@ int main()
 		}
 		else { // Scanning
 			int k;
-			for (k = 0;k < 8; k++){
-				float arr[3] = {2,PI/4,0};
+			for (k = 0;k < 16; k++){
+				float arr[3] = {2,PI/8,0};
 				taskPut(arr, 3);
 			}
 		}
@@ -486,15 +486,13 @@ int main()
 			currentPWMR = R_PWM;
 
 			usleep(500000);
-			while(!taskComplete){
-				scanComplete = 1;
-				scanOnCompletion = 0;
 
-				// Motion loop
-				errorLeft = desiredPositionLeft - currentPositionLeft;
-				errorRight = desiredPositionRight - currentPositionRight;
-
-				if(!robotState){ // forward
+			switch(robotState){
+			case 0:
+				while(!taskComplete){
+					// Motion loop
+					errorLeft = desiredPositionLeft - currentPositionLeft;
+					errorRight = desiredPositionRight - currentPositionRight;
 					if (!leftComplete){
 						if (errorLeft > 1){
 							mraa_pwm_enable(leftPWM, 1);
@@ -526,35 +524,52 @@ int main()
 						}
 					}
 
+					if((leftComplete) && (rightComplete)){
+						taskComplete = 1;
+						updateOdometry();
+						fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.4f], L: %d R: %d\n", currentCoordinate[0], currentCoordinate[1], theta, currentPositionLeft, currentPositionRight);
+					}
+
+					// Odometry update loop
+					odoCount++;
+					if (odoCount % 7 == 0)
+						updateOdometry();
+
 					// Proportional-Derivative control
-//					if (odoCount % 10 == 0){
-//						float scale = 0.01, P = 1, D = 1; // Proportional and derivative constants
-//						err0 = fabs(targetTheta) - fabs(theta); // Proportional error
-//						errDiff = err3 - err0; // Derivative error
-//						output = P*err0 + D*errDiff; // Total error
-//						if (output<0){
-//							output = (-output);
-//							currentPWML += scale*output;
-//							currentPWMR -= scale*output;
-//						}
-//						else if (output>0){
-//							currentPWML -= scale*output;
-//							currentPWMR += scale*output;
-//						}
-//						if (currentPWML > 0.65) currentPWML = 0.65;
-//						else if (currentPWML < 0.35) currentPWML = 0.35;
-//						if (currentPWMR > 0.65) currentPWMR = 0.65;
-//						else if (currentPWMR < 0.35) currentPWMR = 0.35;
-//						mraa_pwm_write(leftPWM, currentPWML);
-//						mraa_pwm_write(rightPWM, currentPWMR);
-//
-//						err3 = err2; // shift states
-//						err2 = err1;
-//						err1 = err0;
-//						printf("P: %.2f D: %.2f OUTPUT: %.3f pwmL: %.2f pwmR: %.2f Theta: %.3f\n", err0, errDiff, output, currentPWML, currentPWMR, theta);
-//					}
+					if (odoCount % 10 == 0){
+						float scale = 0.01, P = 1, D = 1; // Proportional and derivative constants
+						err0 = fabs(targetTheta) - fabs(theta); // Proportional error
+						errDiff = err3 - err0; // Derivative error
+						output = P*err0 + D*errDiff; // Total error
+						if (output<0){
+							output = (-output);
+							currentPWML += scale*output;
+							currentPWMR -= scale*output;
+						}
+						else if (output>0){
+							currentPWML -= scale*output;
+							currentPWMR += scale*output;
+						}
+						if (currentPWML > 0.65) currentPWML = 0.65;
+						else if (currentPWML < 0.35) currentPWML = 0.35;
+						if (currentPWMR > 0.65) currentPWMR = 0.65;
+						else if (currentPWMR < 0.35) currentPWMR = 0.35;
+						mraa_pwm_write(leftPWM, currentPWML);
+						mraa_pwm_write(rightPWM, currentPWMR);
+
+						err3 = err2; // shift states
+						err2 = err1;
+						err1 = err0;
+						printf("P: %.2f D: %.2f OUTPUT: %.3f pwmL: %.2f pwmR: %.2f Theta: %.3f\n", err0, errDiff, output, currentPWML, currentPWMR, theta);
+					}
+
 				}
-				else{ // turning
+				break;
+			case 1:
+				while(!taskComplete){
+					// Motion loop
+					errorLeft = desiredPositionLeft - currentPositionLeft;
+					errorRight = desiredPositionRight - currentPositionRight;
 					if (!leftComplete){
 						if (errorLeft > 1){
 							if (errorLeft < 60) mraa_pwm_write(leftPWM, L_PWM-0.2);
@@ -589,23 +604,132 @@ int main()
 		//						fprintf(stdout, "RIGHT COMPLETE\n");
 						}
 					}
-				}
-
-				if(robotState != 2){
 					if((leftComplete) && (rightComplete)){
 						taskComplete = 1;
 						updateOdometry();
 						fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.4f], L: %d R: %d\n", currentCoordinate[0], currentCoordinate[1], theta, currentPositionLeft, currentPositionRight);
 					}
-				}
-				else {
-					if((leftComplete) && (rightComplete) && (scanComplete)){
-						taskComplete = 1;
+
+					// Odometry update loop
+					odoCount++;
+					if (odoCount % 7 == 0)
 						updateOdometry();
-//						fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.4f], L: %d R: %d\n", currentCoordinate[0], currentCoordinate[1], theta, currentPositionLeft, currentPositionRight);
-						fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.4f], pwmL: %.2f pwmR: %.2f\n", currentCoordinate[0], currentCoordinate[1], theta, mraa_pwm_read(leftPWM), mraa_pwm_read(rightPWM));
-					}
 				}
+				break;
+			case 2:
+				while(!taskComplete){
+					// Motion loop
+					errorLeft = desiredPositionLeft - currentPositionLeft;
+					errorRight = desiredPositionRight - currentPositionRight;
+
+					//DEBUG
+					if(!leftComplete) mraa_pwm_enable(leftPWM, 1);
+					else {
+						mraa_pwm_enable(leftPWM, 0);
+						leftComplete = 1;
+					}
+					if(!rightComplete) mraa_pwm_enable(rightPWM, 1);
+					else {
+						mraa_pwm_enable(rightPWM, 0);
+						rightComplete = 1;
+					}
+					//LEFT
+					if (errorLeft > 1){
+						if (errorLeft < 60) mraa_pwm_write(leftPWM, L_PWM-0.2);
+						mraa_gpio_write(leftDir, 0);
+					}
+					else if (errorLeft < -1){
+						if (errorLeft > -60) mraa_pwm_write(leftPWM, L_PWM-0.2);
+						mraa_gpio_write(leftDir, 1);
+					}
+					else {
+						mraa_pwm_enable(leftPWM, 0);
+						leftComplete = 1;
+	//						fprintf(stdout, "LEFT COMPLETE\n");
+					}
+					//RIGHT
+					if (errorRight > 1){
+						if (errorRight < 60) mraa_pwm_write(rightPWM, R_PWM-0.2);
+						mraa_gpio_write(rightDir, 0);
+					}
+					else if (errorRight < -1){
+						if (errorRight > -60) mraa_pwm_write(rightPWM, R_PWM-0.2);
+						mraa_gpio_write(rightDir, 1);
+					}
+					else {
+						mraa_pwm_enable(rightPWM, 0);
+						rightComplete = 1;
+	//						fprintf(stdout, "RIGHT COMPLETE\n");
+					}
+					//DEBUG END
+
+
+//					if (!leftComplete){
+//						if (errorLeft > 1){
+//							if (errorLeft < 60) mraa_pwm_write(leftPWM, L_PWM-0.2);
+//							mraa_pwm_enable(leftPWM, 1);
+//							mraa_gpio_write(leftDir, 0);
+//						}
+//						else if (errorLeft < -1){
+//							if (errorLeft > -60) mraa_pwm_write(leftPWM, L_PWM-0.2);
+//							mraa_pwm_enable(leftPWM, 1);
+//							mraa_gpio_write(leftDir, 1);
+//						}
+//						else {
+//							mraa_pwm_enable(leftPWM, 0);
+//							leftComplete = 1;
+//		//						fprintf(stdout, "LEFT COMPLETE\n");
+//						}
+//					}
+//					if (!rightComplete){
+//						if (errorRight > 1){
+//							if (errorRight < 60) mraa_pwm_write(rightPWM, R_PWM-0.2);
+//							mraa_pwm_enable(rightPWM, 1);
+//							mraa_gpio_write(rightDir, 0);
+//						}
+//						else if (errorRight < -1){
+//							if (errorRight > -60) mraa_pwm_write(rightPWM, R_PWM-0.2);
+//							mraa_pwm_enable(rightPWM, 1);
+//							mraa_gpio_write(rightDir, 1);
+//						}
+//						else {
+//							mraa_pwm_enable(rightPWM, 0);
+//							rightComplete = 1;
+//		//						fprintf(stdout, "RIGHT COMPLETE\n");
+//						}
+//					}
+					if((leftComplete) && (rightComplete)){
+						updateOdometry();
+						usleep(1000); // 1ms sleep to stabilize
+						pulse(trig);
+						if (readFlag){
+							qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
+							float avg = 0;
+							int i;
+							for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
+								avg += distanceArray[i];
+							}
+							distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
+							if (distAVG < DETECT_DISTANCE-120){
+								float objX, objY;
+								objX = currentCoordinate[0] + (distAVG+SENSOR_OFFSET)*cos(theta);
+								objY = currentCoordinate[1] + (distAVG+SENSOR_OFFSET)*sin(theta);
+								updateObstacle(objX, objY, 0, 0);
+							}
+							readFlag = 0;
+							taskComplete = 1;
+							scanOnCompletion--;
+						}
+						fprintf(stdout, "TASK COMPLETE, XYT:[%.2f,%.2f,%.4f], L: %d R: %d\n", currentCoordinate[0], currentCoordinate[1], theta, currentPositionLeft, currentPositionRight);
+					}
+
+					// Odometry update loop
+					odoCount++;
+					if (odoCount % 7 == 0)
+						updateOdometry();
+				}
+				break;
+			}
 
 				// Obstacle detection loop
 //				switch(robotState){
@@ -668,12 +792,6 @@ int main()
 //						}
 //						break;
 //				}
-
-				// Odometry update loop
-				odoCount++;
-				if (odoCount % 7 == 0)
-					updateOdometry();
-			}
 		}
 		mraa_pwm_enable(rightPWM, 0);
 		mraa_pwm_enable(leftPWM, 0);
