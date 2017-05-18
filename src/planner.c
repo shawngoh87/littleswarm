@@ -144,20 +144,20 @@ void updateObstacle(float xx, float yy, int cleared, int parseFlag){
 	else cJSON_AddStringToObject(payload, "cleared", "0");
 	char* response = curl_operation(payload, URL_OBSTACLE_UPDATE);
 //	printf("\nResponse from AWS:\n%s",response);
-	if (parseFlag){
-		cJSON *body = cJSON_GetObjectItem(cJSON_Parse(response), "Items");
-		int cellCount = cJSON_GetObjectItem(cJSON_Parse(response), "Count")->valueint;
-		int i;
-		for (i = 0; i < cellCount; i++){
-			cJSON *cell = cJSON_GetArrayItem(body,i);
-			char* ptr;
-			float x = strtof(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "x"),"N")->valuestring, &ptr);
-			float y = strtof(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "y"),"N")->valuestring, &ptr);
-			int clr = strtol(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "cleared"),"N")->valuestring, &ptr, 10);
-//			printf("%.3f, %.3f, %d\n", x, y, clr);
-		}
+//	if (parseFlag){
+//		cJSON *body = cJSON_GetObjectItem(cJSON_Parse(response), "Items");
+//		int cellCount = cJSON_GetObjectItem(cJSON_Parse(response), "Count")->valueint;
+//		int i;
+//		for (i = 0; i < cellCount; i++){
+//			cJSON *cell = cJSON_GetArrayItem(body,i);
+//			char* ptr;
+//			float x = strtof(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "x"),"N")->valuestring, &ptr);
+//			float y = strtof(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "y"),"N")->valuestring, &ptr);
+//			int clr = strtol(cJSON_GetObjectItem(cJSON_GetObjectItem(cell, "cleared"),"N")->valuestring, &ptr, 10);
+////			printf("%.3f, %.3f, %d\n", x, y, clr);
+//		}
 //		printf("%s\n", cJSON_Print(body, 4));
-	}
+//	}
 }
 
 
@@ -172,7 +172,7 @@ void initGrid(void){
 //			printf("%d %d\n", cell[i][j][0],cell[i][j][1]);
 		}
 	}
-	cellState[0][0]=1; // Start from cell 0,0
+	cellState[START_X][START_Y]=1; // Start from cell 0,0
 }
 
 void resetGridWeight(){

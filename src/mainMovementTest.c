@@ -431,18 +431,18 @@ int main()
 
 	/* Test Sequence: Misc */
 //	int k;
-//	for (k = 0;k < 20; k++){
-//		float arr2[3] = {1,2*PI,1};
+//	for (k = 0;k < 10; k++){
+//		float arr2[3] = {1,PI/5,1};
 //		taskPut(arr2, 3);
 //	}
 //
-	float arr3[3] = {1,2*PI,0};
-	taskPut(arr3, 3);
+//	float arr3[3] = {1,2*PI,0};
+//	taskPut(arr3, 3);
 //
 //	float arr4[3] = {1,2*PI,0};
 //	taskPut(arr4, 3);
-//	float arr3[3] = {0,975,0};
-//	taskPut(arr3, 3);
+	float arr3[3] = {0,975,0};
+	taskPut(arr3, 3);
 //	float arr4[3] = {0,325,0};
 //	taskPut(arr4, 3);
 
@@ -507,7 +507,7 @@ int main()
 				// Motion loop
 				errorLeft = desiredPositionLeft - currentPositionLeft;
 				errorRight = desiredPositionRight - currentPositionRight;
-
+//				printf("L: %d R: %d\n", errorLeft, errorRight);
 				if(!robotState){ // forward
 					if (!leftComplete){
 						if (errorLeft > 1){
@@ -595,7 +595,7 @@ int main()
 				// Proportional-Derivative control
 				if (odoCount % 10 == 0){
 					if (robotState == 0){ // It is moving forward
-						float scale = 0.01, P = 1, D = 1; // Proportional and derivative constants
+						float scale = 0.01, P = 1, D = 2; // Proportional and derivative constants
 						err0 = fabs(targetTheta) - fabs(theta); // Proportional error
 						errDiff = err3 - err0; // Derivative error
 						output = P*err0 + D*errDiff; // Total error
@@ -619,69 +619,70 @@ int main()
 						err2 = err1;
 						err1 = err0;
 
-//						printf("P: %.2f D: %.2f OUTPUT: %.3f pwmL: %.2f pwmR: %.2f Theta: %.3f\n", err0, errDiff, output, currentPWML, currentPWMR, theta);
+						printf("P: %.2f D: %.2f OUTPUT: %.3f pwmL: %.2f pwmR: %.2f Theta: %.3f\n", err0, errDiff, output, currentPWML, currentPWMR, theta);
 					}
 				}
 
 				// Obstacle detection loop
-				switch(robotState){
-					case 0: // /going forward
-						pulse(trig);
-						if (readFlag){
-							qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
-							float avg = 0;
-							int i;
-							for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
-								avg += distanceArray[i];
-							}
-							distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
-		//					printf("AVERAGE: %.2f\n", distAVG);
-							printf("%.2f\n", distAVG);
-							if (distAVG < 100){
-								mraa_pwm_enable(rightPWM, 0);
-								mraa_pwm_enable(leftPWM, 0);
-								printf("Ciao\n");
-								taskGetPtr = taskPutPtr;
-								float D = sqrt(2*(distAVG+SENSOR_OFFSET)*(distAVG+SENSOR_OFFSET));
-								float ccw45[3] = {1,PI/4,1};
-								float frontD[3] = {0, D, 0};
-								float cw90[3] = {1, PI/2, 0};
-								taskPut(ccw45, 3);
-								taskPut(frontD, 3);
-								taskPut(cw90, 3);
-								taskPut(frontD, 3);
-								taskPut(ccw45, 3);
-								taskComplete = 1;
-							}
-
-		//					printf("%.2f\n", distance);
-							readFlag=0;
-						}
-						break;
-					case 2:
-						if (leftComplete && rightComplete){
-							usleep(1000); // 1ms sleep to stabilize
-							pulse(trig);
-							if (readFlag){
-								qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
-								float avg = 0;
-								int i;
-								for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
-									avg += distanceArray[i];
-								}
-								distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
-			//					printf("AVERAGE: %.2f\n", distAVG);
-								printf("%.2f      ", distAVG);
-								if (distAVG < 300){
-									printf(" <-------------- \n");
-								}else printf("\n");
-
-								readFlag=0;
-								scanComplete = 1;
-							}
-						}
-						break;
-				}
+//				switch(robotState){
+//					case 0: // /going forward
+//						pulse(trig);
+//						if (readFlag){
+//							qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
+//							float avg = 0;
+//							int i;
+//							for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
+//								avg += distanceArray[i];
+//							}
+//							distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
+//		//					printf("AVERAGE: %.2f\n", distAVG);
+//							printf("%.2f\n", distAVG);
+//							if (distAVG < 100){
+//								mraa_pwm_enable(rightPWM, 0);
+//								mraa_pwm_enable(leftPWM, 0);
+//								printf("Ciao\n");
+//								taskGetPtr = taskPutPtr;
+//								float D = sqrt(2*(distAVG+SENSOR_OFFSET)*(distAVG+SENSOR_OFFSET));
+//								float ccw45[3] = {1,PI/4,1};
+//								float frontD[3] = {0, D, 0};
+//								float cw90[3] = {1, PI/2, 0};
+//								taskPut(ccw45, 3);
+//								taskPut(frontD, 3);
+//
+////								taskPut(cw90, 3);
+////								taskPut(frontD, 3);
+////								taskPut(ccw45, 3);
+//								taskComplete = 1;
+//							}
+//
+//		//					printf("%.2f\n", distance);
+//							readFlag=0;
+//						}
+//						break;
+//					case 2:
+//						if (leftComplete && rightComplete){
+//							usleep(1000); // 1ms sleep to stabilize
+//							pulse(trig);
+//							if (readFlag){
+//								qsort(distanceArray, DETECT_FILTER_ARRAY_SIZE, sizeof(distanceArray[0]), compare);
+//								float avg = 0;
+//								int i;
+//								for (i = DETECT_FILTER_CUTOFF_SIZE; i < DETECT_FILTER_ARRAY_SIZE-DETECT_FILTER_CUTOFF_SIZE; i++){
+//									avg += distanceArray[i];
+//								}
+//								distAVG = avg/(DETECT_FILTER_ARRAY_SIZE-2*DETECT_FILTER_CUTOFF_SIZE);
+//			//					printf("AVERAGE: %.2f\n", distAVG);
+//								printf("%.2f      ", distAVG);
+//								if (distAVG < 300){
+//									printf(" <-------------- \n");
+//								}else printf("\n");
+//
+//								readFlag=0;
+//								scanComplete = 1;
+//							}
+//						}
+//						break;
+//				}
 
 //				else pulse(trig);
 
